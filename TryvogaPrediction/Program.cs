@@ -286,14 +286,15 @@ namespace Tryvoga
 
         public static void Main(string[] args)
         {
+            Console.OutputEncoding = Encoding.UTF8;
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
             }
-            var predictionEngines = GetPredictionEngines();
 
-            Console.OutputEncoding = Encoding.UTF8;
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
+            var predictionEngines = events.Count > 0 ? GetPredictionEngines(): new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
+            
             using var client = new WTelegram.Client(Config);
             var my = client.LoginUserIfNeeded().Result;
             var x = client.Messages_GetAllChats().Result;
