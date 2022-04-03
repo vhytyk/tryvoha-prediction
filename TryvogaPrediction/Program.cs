@@ -148,7 +148,7 @@ namespace Tryvoga
 
         static void ShowRegions(Dictionary<int, TryvohaEvent> events)
         {
-            var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key);
+            var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             ConsoleColor color = Console.ForegroundColor;
             foreach (var group in grouped)
             {
