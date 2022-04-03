@@ -200,7 +200,8 @@ namespace TryvogaPrediction
 
         static Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> GetPredictionEngines(Dictionary<int, TryvohaEvent> events, bool regenerate = false)
         {
-            var regions = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e).Select(e => e);
+            var regions = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key)
+                .Where(e => e != "Луганська" && e != "Донецька").OrderBy(e => e);
             Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> result
                 = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             foreach(string region in regions)
