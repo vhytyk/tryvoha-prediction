@@ -16,7 +16,7 @@ namespace Tryvoga
 {
     class Program
     {
-        static string path = "/Users/vic/tryvoha";
+        static string path = "/tmp/tryvoha";
         static string fileName = $"{path}/tryvoha.csv";
         public class TryvohaEvent
         {
@@ -242,12 +242,11 @@ namespace Tryvoga
 
         public static void Main(string[] args)
         {
+            GenerateData("Закарпатська");
+            GenerateData("Львівська");
 
-            //GenerateData("Закарпатська");
-            //GenerateData("Львівська");
-
-            //var zakPre = CreatePredictionEngine("Закарпатська");
-            //var lvPre = CreatePredictionEngine("Львівська");
+            var zakPre = CreatePredictionEngine("Закарпатська");
+            var lvPre = CreatePredictionEngine("Львівська");
 
             Console.OutputEncoding = Encoding.UTF8;
             Dictionary<int, TryvohaEvent> events = LoadFromDb<TryvohaEvent>();
@@ -258,19 +257,17 @@ namespace Tryvoga
             Channel tryvogaPrediction = (Channel)x.chats[1766772788];
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
-            if (events.Count > 0)
-            {
-                Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
-                FillInEvents(client, tryvoga, initialEvents, events.Keys);
+            Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
+            FillInEvents(client, tryvoga, initialEvents, events.Keys);
 
-                foreach (var e in initialEvents)
+            foreach (var e in initialEvents)
+            {
+                if (!events.ContainsKey(e.Key))
                 {
-                    if (!events.ContainsKey(e.Key))
-                    {
-                        events.Add(e.Key, e.Value);
-                    }
+                    events.Add(e.Key, e.Value);
                 }
             }
+
 
             init = false;
             while (true)
@@ -289,19 +286,19 @@ namespace Tryvoga
                 {
                     RegionsOn = string.Join(',', grouped.Select(g => g.Region))
                 };
-                //var zakRes = zakPre.Predict(sampleStatement);
-                //var lvRes = lvPre.Predict(sampleStatement);
-                //Console.WriteLine("----");
-                //Console.WriteLine($"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
-                //Console.WriteLine($"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
-                //if (newEvents && zakRes.Probability > 0.7)
-                //{
-                //    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
-                //}
-                //if (newEvents && lvRes.Probability > 0.7)
-                //{
-                //    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
-                //}
+                var zakRes = zakPre.Predict(sampleStatement);
+                var lvRes = lvPre.Predict(sampleStatement);
+                Console.WriteLine("----");
+                Console.WriteLine($"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
+                Console.WriteLine($"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
+                if (newEvents && zakRes.Probability > 0.7)
+                {
+                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
+                }
+                if (newEvents && lvRes.Probability > 0.7)
+                {
+                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
+                }
 
                 Thread.Sleep(10000);
             }
