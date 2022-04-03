@@ -198,9 +198,9 @@ namespace TryvogaPrediction
             return mlContext.Model.CreatePredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>(model);
         }
 
-        static Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> GetPredictionEngines(bool regenerate = false)
+        static Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> GetPredictionEngines(Dictionary<int, TryvohaEvent> events, bool regenerate = false)
         {
-            string[] regions = new string[] { "Закарпатська", "Львівська"};
+            var regions = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e).Select(e => e);
             Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> result
                 = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             foreach(string region in regions)
@@ -217,6 +217,7 @@ namespace TryvogaPrediction
             Channel tryvogaPrediction,
             bool newEvents)
         {
+            string[] notificationRegions = new string[] { "Закарпатська", "Львівська" };
             var groupedForPrediction = events.Values.GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
@@ -238,7 +239,7 @@ namespace TryvogaPrediction
                 {
                     var predictionResult = predictionEngines[group].Predict(sampleStatement);
                     Console.WriteLine($" ({predictionResult.Probability * 100:0.0}% за 10хв)");
-                    if (newEvents && predictionResult.Probability > 0.7)
+                    if (newEvents && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"10хв ймовірність на {group} - {predictionResult.Probability * 100:0.0}%");
@@ -260,7 +261,9 @@ namespace TryvogaPrediction
             }
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
-            var predictionEngines = events.Count > 0 ? GetPredictionEngines(): new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
+            var predictionEngines = events.Count > 0
+                ? GetPredictionEngines(events)
+                : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             
             using var client = new WTelegram.Client(ConfigForTelegramClient);
             var my = client.LoginUserIfNeeded().Result;
