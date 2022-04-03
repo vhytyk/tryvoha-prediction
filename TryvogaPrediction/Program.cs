@@ -286,6 +286,7 @@ namespace Tryvoga
 
         public static void Main(string[] args)
         {
+            WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
             if (!Directory.Exists(path))
             {
