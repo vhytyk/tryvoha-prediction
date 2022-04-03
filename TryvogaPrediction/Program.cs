@@ -286,6 +286,10 @@ namespace Tryvoga
 
         public static void Main(string[] args)
         {
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
             var predictionEngines = GetPredictionEngines();
 
             Console.OutputEncoding = Encoding.UTF8;
