@@ -152,14 +152,41 @@ namespace TryvogaPrediction
 
             return metrics;
         }
+        static Dictionary<string, string> regionsSmall = new Dictionary<string, string>
+        {
+            { "Вінницька", "AB" },
+            { "Волинська", "AC" },
+            { "Дніпропетровська", "AE" },
+            { "Донецька", "AH" },
+            { "Житомирська", "AM" },
+            { "Закарпатська", "AO" },
+            { "Запорізька", "AP" },
+            { "Івано-Франківська", "AT" },
+            { "Київська", "AI" },
+            { "Кіровоградська", "BA" },
+            { "Луганська", "BB" },
+            { "Львівська", "BC" },
+            { "Миколаївська", "BE" },
+            { "Одеська", "BH" },
+            { "Полтавська", "BI" },
+            { "Рівненська", "BK" },
+            { "Сумська", "BM" },
+            { "Тернопільська", "BO" },
+            { "Харківська", "AX" },
+            { "Херсонська", "BT" },
+            { "Хмельницька", "BX" },
+            { "Черкаська", "CA" },
+            { "Чернігівська", "CB" },
+            { "Чернівецька", "CE" }
 
+        };
         static void GenerateData(string region)
         {
             Console.Write($"Generating train set for {region}...");
-            Dictionary<int, TryvohaEvent> events = LoadFromFile();           
+            Dictionary<int, TryvohaEvent> events = LoadFromFile();
             File.WriteAllText($"{path}/{region}.csv", $"RegionsOn;Min10{Environment.NewLine}");
-            
-            foreach (var ev in events.Values)
+
+            foreach (var ev in events.Values.Where(e => e.Region != region))
             {
                 var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
                 var grouped = previousEvents.GroupBy(e => e.Region).Select(e => new
@@ -170,14 +197,14 @@ namespace TryvogaPrediction
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
                 var r = new TryvohaTrainingRecord
                 {
-                    RegionsOn = string.Join(',', grouped.Select(g => g.Region)),
+                    RegionsOn = string.Join(' ', grouped.Select(g => regionsSmall[g.Region])),
                     Min10 = events.Values.Where(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(10) && e.Region == region && e.OnOff).Any()
                 };
                 File.AppendAllText($"{path}/{region}.csv", $"{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
             Console.WriteLine("done");
         }
-
+        static List<double> posAvg = new List<double>();
         static PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord> CreatePredictionEngine(string region, bool regenerate = false)
         {
             Console.Write($"Creating prediction engine for {region}...");
@@ -194,7 +221,8 @@ namespace TryvogaPrediction
                 mlContext.Model.Save(model, dataView.Schema, $"{path}/{region}.zip");
             }
             var eval = Evaluate(mlContext, model, splitDataView.TestSet);
-            Console.WriteLine($"{eval.Accuracy}%");
+            Console.WriteLine($" acc: {eval.Accuracy:0.00}, posrec: {eval.PositiveRecall:0.00}, f1: {eval.F1Score:0.00}");
+            posAvg.Add(eval.PositiveRecall);
             return mlContext.Model.CreatePredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>(model);
         }
 
@@ -204,7 +232,7 @@ namespace TryvogaPrediction
                 .Where(e => e != "Луганська" && e != "Донецька" && e != "Херсонська").OrderBy(e => e);
             Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> result
                 = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
-            foreach(string region in regions)
+            foreach (string region in regions)
             {
                 GenerateData(region);
                 result[region] = CreatePredictionEngine(region, regenerate);
@@ -228,8 +256,7 @@ namespace TryvogaPrediction
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(',', groupedForPrediction.Select(g => g.Region)),
-                Min10 = true
+                RegionsOn = string.Join(',', groupedForPrediction.Select(g => regionsSmall[g.Region]))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             ConsoleColor color = Console.ForegroundColor;
@@ -241,20 +268,24 @@ namespace TryvogaPrediction
                 if (predictionEngines.ContainsKey(group) && !last.OnOff)
                 {
                     var predictionResult = predictionEngines[group].Predict(sampleStatement);
+                    if (predictionResult.Prediction)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                    }
                     Console.WriteLine($" ({predictionResult.Probability * 100:0.0}%, {predictionResult.Prediction}, {predictionResult.Score})");
                     if (newEvents && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (newEvents && predictionResult.Probability > 0.7 )
+                    if (newEvents && predictionResult.Probability > 0.7)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
                 }
                 else { Console.WriteLine("."); }
-                
+
             }
             Console.ForegroundColor = color;
         }
@@ -270,7 +301,7 @@ namespace TryvogaPrediction
             Channel tryvogaChannel = (Channel)allChats.chats[1766138888];
             Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
             Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
-            
+
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
@@ -278,9 +309,9 @@ namespace TryvogaPrediction
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             var predictionEngines = events.Count > 0
-                ? GetPredictionEngines(events)
+                ? GetPredictionEngines(events, true)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
-            
+            Console.WriteLine(posAvg.Average());
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
@@ -302,8 +333,8 @@ namespace TryvogaPrediction
                 FillInEvents(client, tryvogaChannel, events);
                 bool newEvents = eventsCount != events.Count;
                 ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, tryvogaPredictionTest, newEvents);
-                
-                if(DateTime.Now.Minute == 15 && !regenerating)
+
+                if (DateTime.Now.Minute == 15 && !regenerating)
                 {
                     regenerating = true;
                     predictionEngines = GetPredictionEngines(events, true);
