@@ -10,6 +10,7 @@ using Microsoft.ML;
 using Microsoft.ML.Data;
 using static Microsoft.ML.DataOperationsCatalog;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 
 namespace Tryvoga
 {
@@ -28,15 +29,22 @@ namespace Tryvoga
             [LoadColumn(3)]
             public bool OnOff { get; set; }
         }
+        static IConfiguration config;
         static string Config(string what)
         {
+            if (config == null)
+            {
+                config = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json", optional: true)
+                .Build();
+            }
             switch (what)
             {
-                case "api_id": return "17668141";
-                case "api_hash": return "9bb93730780057ee0011798211bb3f14";
-                case "phone_number": return "+380506752507";
+                case "api_id": return config["api_id"];
+                case "api_hash": return config["api_hash"];
+                case "phone_number": return config["phone_number"];
                 case "verification_code": Console.Write("Code: "); return Console.ReadLine();
-                case "password": return "secret!";     // if user has enabled 2FA
+                case "password": return config["password"];     // if user has enabled 2FA
                 default: return null;                  // let WTelegramClient decide the default config
             }
         }
@@ -170,20 +178,21 @@ namespace Tryvoga
         }
         public static ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
-           
-            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TrainRecord.RegionsOn))            
+
+            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TrainRecord.RegionsOn))
              .Append(mlContext.BinaryClassification.Trainers.SdcaLogisticRegression(labelColumnName: "Label", featureColumnName: "Features"));
-           
-            var model = estimator.Fit(splitTrainSet);          
+
+            var model = estimator.Fit(splitTrainSet);
+
             return model;
         }
 
         public static CalibratedBinaryClassificationMetrics Evaluate(MLContext mlContext, ITransformer model, IDataView splitTestSet)
         {
             IDataView predictions = model.Transform(splitTestSet);
-           
+
             CalibratedBinaryClassificationMetrics metrics = mlContext.BinaryClassification.Evaluate(predictions, "Label");
-           
+
             return metrics;
         }
 
@@ -217,7 +226,15 @@ namespace Tryvoga
             MLContext mlContext = new MLContext();
             IDataView dataView = mlContext.Data.LoadFromTextFile<TrainRecord>($"{path}/{region}.csv", hasHeader: true, separatorChar: ';');
             TrainTestData splitDataView = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
-            var model = BuildAndTrainModel(mlContext, splitDataView.TrainSet);
+
+
+            var model = File.Exists($"{path}/{region}.zip")
+                ? mlContext.Model.Load($"{path}/{region}.zip", out _)
+                : BuildAndTrainModel(mlContext, splitDataView.TrainSet);
+            if (!File.Exists($"{path}/{region}.zip"))
+            {
+                mlContext.Model.Save(model, dataView.Schema, $"{path}/{region}.zip");
+            }
             var eval = Evaluate(mlContext, model, splitDataView.TestSet);
             Console.WriteLine($"{eval.Accuracy}%");
             return mlContext.Model.CreatePredictionEngine<TrainRecord, PredictionRecord>(model);
@@ -225,13 +242,12 @@ namespace Tryvoga
 
         public static void Main(string[] args)
         {
-            
-            GenerateData("Закарпатська");
-            GenerateData("Львівська");
-            //return;
-            
-            var zakPre = CreatePredictionEngine("Закарпатська");
-            var lvPre = CreatePredictionEngine("Львівська");
+
+            //GenerateData("Закарпатська");
+            //GenerateData("Львівська");
+
+            //var zakPre = CreatePredictionEngine("Закарпатська");
+            //var lvPre = CreatePredictionEngine("Львівська");
 
             Console.OutputEncoding = Encoding.UTF8;
             Dictionary<int, TryvohaEvent> events = LoadFromDb<TryvohaEvent>();
@@ -255,7 +271,7 @@ namespace Tryvoga
                     }
                 }
             }
-            
+
             init = false;
             while (true)
             {
@@ -273,19 +289,19 @@ namespace Tryvoga
                 {
                     RegionsOn = string.Join(',', grouped.Select(g => g.Region))
                 };
-                var zakRes = zakPre.Predict(sampleStatement);
-                var lvRes = lvPre.Predict(sampleStatement);
-                Console.WriteLine("----");
-                Console.WriteLine($"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
-                Console.WriteLine($"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
-                if (newEvents && zakRes.Probability > 0.7)
-                {
-                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
-                }
-                if (newEvents && lvRes.Probability > 0.7)
-                {
-                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
-                }
+                //var zakRes = zakPre.Predict(sampleStatement);
+                //var lvRes = lvPre.Predict(sampleStatement);
+                //Console.WriteLine("----");
+                //Console.WriteLine($"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
+                //Console.WriteLine($"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
+                //if (newEvents && zakRes.Probability > 0.7)
+                //{
+                //    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
+                //}
+                //if (newEvents && lvRes.Probability > 0.7)
+                //{
+                //    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
+                //}
 
                 Thread.Sleep(10000);
             }
