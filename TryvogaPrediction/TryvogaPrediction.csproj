@@ -10,13 +10,11 @@
     <PackageReference Include="Microsoft.ML" Version="1.7.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0" />
   </ItemGroup>
+
   <ItemGroup>
-    <Compile Remove="Program.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Program.cs" Condition=" '$(EnableDefaultCompileItems)' == 'true' ">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <Compile Update="Program.cs">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json">
