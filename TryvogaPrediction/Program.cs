@@ -216,9 +216,10 @@ namespace TryvogaPrediction
             Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> predictionEngines,
             Dictionary<int, TryvohaEvent> events,
             Channel tryvogaPrediction,
+            Channel tryvogaPredictionTest,
             bool newEvents)
         {
-            string[] notificationRegions = new string[] { "Закарпатська", "Львівська" };
+            string[] notificationRegions = new string[] { "Закарпатська", "Львівська", "Івано-Франківська" };
             var groupedForPrediction = events.Values.GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
@@ -227,7 +228,8 @@ namespace TryvogaPrediction
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(',', groupedForPrediction.Select(g => g.Region))
+                RegionsOn = string.Join(',', groupedForPrediction.Select(g => g.Region)),
+                Min10 = true
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             ConsoleColor color = Console.ForegroundColor;
@@ -239,11 +241,16 @@ namespace TryvogaPrediction
                 if (predictionEngines.ContainsKey(group) && !last.OnOff)
                 {
                     var predictionResult = predictionEngines[group].Predict(sampleStatement);
-                    Console.WriteLine($" ({predictionResult.Probability * 100:0.0}% за 10хв)");
+                    Console.WriteLine($" ({predictionResult.Probability * 100:0.0}%, {predictionResult.Prediction}, {predictionResult.Score})");
                     if (newEvents && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
-                            $"10хв ймовірність на {group} - {predictionResult.Probability * 100:0.0}%");
+                            $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
+                    }
+                    if (newEvents && predictionResult.Probability > 0.7 )
+                    {
+                        client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
+                            $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
                 }
                 else { Console.WriteLine("."); }
@@ -256,6 +263,14 @@ namespace TryvogaPrediction
         {
             WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
+
+            using var client = new WTelegram.Client(ConfigForTelegramClient);
+            var my = client.LoginUserIfNeeded().Result;
+            Messages_Chats allChats = client.Messages_GetAllChats().Result;
+            Channel tryvogaChannel = (Channel)allChats.chats[1766138888];
+            Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
+            Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
+            
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);
@@ -266,11 +281,6 @@ namespace TryvogaPrediction
                 ? GetPredictionEngines(events)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             
-            using var client = new WTelegram.Client(ConfigForTelegramClient);
-            var my = client.LoginUserIfNeeded().Result;
-            Messages_Chats allChats = client.Messages_GetAllChats().Result;
-            Channel tryvogaChannel = (Channel)allChats.chats[1766138888];
-            Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
@@ -291,7 +301,7 @@ namespace TryvogaPrediction
                 int eventsCount = events.Count;
                 FillInEvents(client, tryvogaChannel, events);
                 bool newEvents = eventsCount != events.Count;
-                ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, newEvents);
+                ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, tryvogaPredictionTest, newEvents);
                 
                 if(DateTime.Now.Minute == 15 && !regenerating)
                 {
