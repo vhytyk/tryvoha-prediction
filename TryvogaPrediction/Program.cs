@@ -133,20 +133,6 @@ namespace TryvogaPrediction
             SaveToFile(events);
         }
 
-        static void ShowRegions(Dictionary<int, TryvohaEvent> events)
-        {
-            var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
-            ConsoleColor color = Console.ForegroundColor;
-            foreach (var group in grouped)
-            {
-                var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == group);
-                Console.ForegroundColor = last.OnOff ? ConsoleColor.Red : ConsoleColor.Green;
-                Console.WriteLine($"{group}: {(last.OnOff ? "тривога" : "немає")}");
-            }
-            Console.ForegroundColor = color;
-        }
-
-       
         public static ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
 
@@ -301,7 +287,6 @@ namespace TryvogaPrediction
                 int eventsCount = events.Count;
                 FillInEvents(client, tryvogaChannel, events);
                 bool newEvents = eventsCount != events.Count;
-                ShowRegions(events);
                 ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, newEvents);
                 
                 if(DateTime.Now.Minute == 15 && !regenerating)
