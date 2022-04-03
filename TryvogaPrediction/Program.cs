@@ -103,9 +103,9 @@ namespace Tryvoga
             }
         }
 
-        public static Dictionary<int, T> LoadFromDb<T>() where T : TryvohaEvent
+        public static Dictionary<int, TryvohaEvent> LoadFromFile()
         {
-            Dictionary<int, T> result = new Dictionary<int, T>();
+            Dictionary<int, TryvohaEvent> result = new Dictionary<int, TryvohaEvent>();
             if (!File.Exists(fileName))
             {
                 return result;
@@ -122,12 +122,12 @@ namespace Tryvoga
                     {
                         continue;
                     }
-                    T e = Activator.CreateInstance<T>();
+                    TryvohaEvent e = new TryvohaEvent();
                     e.Id = int.Parse(fields[0]);
                     e.EventTime = DateTime.Parse(fields[1]);
                     e.Region = fields[2];
                     e.OnOff = bool.Parse(fields[3]);
-                    result.Add(int.Parse(fields[0]), e);
+                    result.Add(e.Id, e);
                 }
             }
             return result;
@@ -159,14 +159,14 @@ namespace Tryvoga
             Console.ForegroundColor = color;
         }
 
-        public class TrainRecord
+        public class TryvohaTrainingRecord
         {
             [LoadColumn(0)]
             public string RegionsOn { get; set; }
             [LoadColumn(1), ColumnName("Label")]
             public bool Min10 { get; set; }
         }
-        public class PredictionRecord : TrainRecord
+        public class TryvohaPredictionRecord : TryvohaTrainingRecord
         {
 
             [ColumnName("PredictedLabel")]
@@ -179,7 +179,7 @@ namespace Tryvoga
         public static ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
 
-            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TrainRecord.RegionsOn))
+            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TryvohaTrainingRecord.RegionsOn))
              .Append(mlContext.BinaryClassification.Trainers.SdcaLogisticRegression(labelColumnName: "Label", featureColumnName: "Features"));
 
             var model = estimator.Fit(splitTrainSet);
@@ -199,8 +199,9 @@ namespace Tryvoga
         static void GenerateData(string region)
         {
             Console.Write($"Generating train set for {region}...");
+            Dictionary<int, TryvohaEvent> events = LoadFromFile();           
             File.WriteAllText($"{path}/{region}.csv", $"RegionsOn;Min10{Environment.NewLine}");
-            Dictionary<int, TryvohaEvent> events = LoadFromDb<TryvohaEvent>();
+            
             foreach (var ev in events.Values)
             {
                 var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
@@ -210,7 +211,7 @@ namespace Tryvoga
                     OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
                     EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
-                var r = new TrainRecord
+                var r = new TryvohaTrainingRecord
                 {
                     RegionsOn = string.Join(',', grouped.Select(g => g.Region)),
                     Min10 = events.Values.Where(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(10) && e.Region == region && e.OnOff).Any()
@@ -220,36 +221,75 @@ namespace Tryvoga
             Console.WriteLine("done");
         }
 
-        static PredictionEngine<TrainRecord, PredictionRecord> CreatePredictionEngine(string region)
+        static PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord> CreatePredictionEngine(string region, bool regenerate = false)
         {
             Console.Write($"Creating prediction engine for {region}...");
             MLContext mlContext = new MLContext();
-            IDataView dataView = mlContext.Data.LoadFromTextFile<TrainRecord>($"{path}/{region}.csv", hasHeader: true, separatorChar: ';');
+            IDataView dataView = mlContext.Data.LoadFromTextFile<TryvohaTrainingRecord>($"{path}/{region}.csv", hasHeader: true, separatorChar: ';');
             TrainTestData splitDataView = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
 
-            var model = File.Exists($"{path}/{region}.zip")
+            var model = File.Exists($"{path}/{region}.zip") && !regenerate
                 ? mlContext.Model.Load($"{path}/{region}.zip", out _)
                 : BuildAndTrainModel(mlContext, splitDataView.TrainSet);
-            if (!File.Exists($"{path}/{region}.zip"))
+            if (!File.Exists($"{path}/{region}.zip") || regenerate)
             {
                 mlContext.Model.Save(model, dataView.Schema, $"{path}/{region}.zip");
             }
             var eval = Evaluate(mlContext, model, splitDataView.TestSet);
             Console.WriteLine($"{eval.Accuracy}%");
-            return mlContext.Model.CreatePredictionEngine<TrainRecord, PredictionRecord>(model);
+            return mlContext.Model.CreatePredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>(model);
+        }
+
+        static Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> GetPredictionEngines(bool regenerate = false)
+        {
+            string[] regions = new string[] { "Закарпатська", "Львівська"};
+            Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> result
+                = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
+            foreach(string region in regions)
+            {
+                GenerateData(region);
+                result[region] = CreatePredictionEngine(region, regenerate);
+            }
+            return result;
+        }
+
+        static void ShowPredictionMessage(WTelegram.Client client,
+            Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> predictionEngines,
+            Dictionary<int, TryvohaEvent> events,
+            Channel tryvogaPrediction,
+            bool newEvents)
+        {
+            Console.WriteLine("----");
+
+            var grouped = events.Values.GroupBy(e => e.Region).Select(e => new
+            {
+                Region = e.Key,
+                OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
+                EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
+            }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
+            TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
+            {
+                RegionsOn = string.Join(',', grouped.Select(g => g.Region))
+            };
+            foreach (var prediction in predictionEngines)
+            {
+                var predictionResult = prediction.Value.Predict(sampleStatement);
+                string predictionMessage = $"10хв ймовірність на {prediction.Key} - {predictionResult.Probability * 100:0.0}%";
+                Console.WriteLine(predictionMessage);
+                if (newEvents && predictionResult.Probability > 0.7)
+                {
+                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), predictionMessage);
+                }
+            }
         }
 
         public static void Main(string[] args)
         {
-            GenerateData("Закарпатська");
-            GenerateData("Львівська");
-
-            var zakPre = CreatePredictionEngine("Закарпатська");
-            var lvPre = CreatePredictionEngine("Львівська");
+            var predictionEngines = GetPredictionEngines();
 
             Console.OutputEncoding = Encoding.UTF8;
-            Dictionary<int, TryvohaEvent> events = LoadFromDb<TryvohaEvent>();
+            Dictionary<int, TryvohaEvent> events = LoadFromFile();
             using var client = new WTelegram.Client(Config);
             var my = client.LoginUserIfNeeded().Result;
             var x = client.Messages_GetAllChats().Result;
@@ -268,41 +308,27 @@ namespace Tryvoga
                 }
             }
 
-
             init = false;
+            bool regenerating = false;
             while (true)
             {
                 int eventsCount = events.Count;
                 FillInEvents(client, tryvoga, events);
                 bool newEvents = eventsCount != events.Count;
                 ShowRegions(events);
-                var grouped = events.Values.GroupBy(e => e.Region).Select(e => new
+                ShowPredictionMessage(client, predictionEngines, events, tryvogaPrediction, newEvents);
+                
+                if(DateTime.Now.Minute == 15 && !regenerating)
                 {
-                    Region = e.Key,
-                    OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
-                }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
-                TrainRecord sampleStatement = new TrainRecord
-                {
-                    RegionsOn = string.Join(',', grouped.Select(g => g.Region))
-                };
-                var zakRes = zakPre.Predict(sampleStatement);
-                var lvRes = lvPre.Predict(sampleStatement);
-                Console.WriteLine("----");
-                Console.WriteLine($"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
-                Console.WriteLine($"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
-                if (newEvents && zakRes.Probability > 0.7)
-                {
-                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність на Закарпатській - {zakRes.Probability * 100:0.0}%");
+                    regenerating = true;
+                    predictionEngines = GetPredictionEngines(true);
                 }
-                if (newEvents && lvRes.Probability > 0.7)
+                if (DateTime.Now.Minute == 16)
                 {
-                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), $"10хв ймовірність у Львівській - {lvRes.Probability * 100:0.0}%");
+                    regenerating = false;
                 }
-
                 Thread.Sleep(10000);
             }
-
         }
     }
 }
