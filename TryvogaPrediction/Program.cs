@@ -197,8 +197,8 @@ namespace TryvogaPrediction
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
                 var r = new TryvohaTrainingRecord
                 {
-                    RegionsOn = string.Join(' ', grouped.Select(g => regionsSmall[g.Region])),
-                    Min10 = events.Values.Where(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(10) && e.Region == region && e.OnOff).Any()
+                    RegionsOn = string.Join(" ", grouped.Select(g => regionsSmall[g.Region])),
+                    Min10 = events.Values.Where(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff).Any()
                 };
                 File.AppendAllText($"{path}/{region}.csv", $"{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
