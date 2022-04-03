@@ -295,7 +295,7 @@ namespace TryvogaPrediction
                 if(DateTime.Now.Minute == 15 && !regenerating)
                 {
                     regenerating = true;
-                    predictionEngines = GetPredictionEngines(true);
+                    predictionEngines = GetPredictionEngines(events, true);
                 }
                 if (DateTime.Now.Minute == 16)
                 {
