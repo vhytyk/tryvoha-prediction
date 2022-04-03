@@ -12,32 +12,18 @@ using static Microsoft.ML.DataOperationsCatalog;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 
-namespace Tryvoga
+namespace TryvogaPrediction
 {
     class Program
     {
         static string path = "/tmp/tryvoha";
         static string fileName = $"{path}/tryvoha.csv";
-        public class TryvohaEvent
-        {
-            [LoadColumn(0)]
-            public int Id { get; set; }
-            [LoadColumn(1)]
-            public DateTime EventTime { get; set; }
-            [LoadColumn(2)]
-            public string Region { get; set; }
-            [LoadColumn(3)]
-            public bool OnOff { get; set; }
-        }
-        static IConfiguration config;
-        static string Config(string what)
-        {
-            if (config == null)
-            {
-                config = new ConfigurationBuilder()
+        static IConfiguration config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true)
                 .Build();
-            }
+
+        static string ConfigForTelegramClient(string what)
+        {
             switch (what)
             {
                 case "api_id": return config["api_id"];
@@ -93,7 +79,7 @@ namespace Tryvoga
             }
             return null;
         }
-        static void SaveToDb(Dictionary<int, TryvohaEvent> events)
+        static void SaveToFile(Dictionary<int, TryvohaEvent> events)
         {
 
             File.WriteAllText(fileName, $"Id;EventTime;Region;OnOff{Environment.NewLine}");
@@ -135,6 +121,7 @@ namespace Tryvoga
 
         static void FillInEvents(WTelegram.Client client, Channel tryvoga, Dictionary<int, TryvohaEvent> events, IEnumerable<int> loadedKeys = null)
         {
+            Console.WriteLine($"{Environment.NewLine}{DateTime.Now}: getting new events...");
             int msgCount = -1;
             while (msgCount < events.Count && (loadedKeys == null || !events.Keys.Intersect(loadedKeys).Any()))
             {
@@ -143,7 +130,7 @@ namespace Tryvoga
                 GetEvents(client, tryvoga, events);
                 Console.WriteLine($"events added {events.Count - msgCount}, total count: {events.Count}");
             }
-            SaveToDb(events);
+            SaveToFile(events);
         }
 
         static void ShowRegions(Dictionary<int, TryvohaEvent> events)
@@ -159,23 +146,7 @@ namespace Tryvoga
             Console.ForegroundColor = color;
         }
 
-        public class TryvohaTrainingRecord
-        {
-            [LoadColumn(0)]
-            public string RegionsOn { get; set; }
-            [LoadColumn(1), ColumnName("Label")]
-            public bool Min10 { get; set; }
-        }
-        public class TryvohaPredictionRecord : TryvohaTrainingRecord
-        {
-
-            [ColumnName("PredictedLabel")]
-            public bool Prediction { get; set; }
-
-            public float Probability { get; set; }
-
-            public float Score { get; set; }
-        }
+       
         public static ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
 
@@ -260,9 +231,7 @@ namespace Tryvoga
             Channel tryvogaPrediction,
             bool newEvents)
         {
-            Console.WriteLine("----");
-
-            var grouped = events.Values.GroupBy(e => e.Region).Select(e => new
+            var groupedForPrediction = events.Values.GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
                 OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
@@ -270,18 +239,29 @@ namespace Tryvoga
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(',', grouped.Select(g => g.Region))
+                RegionsOn = string.Join(',', groupedForPrediction.Select(g => g.Region))
             };
-            foreach (var prediction in predictionEngines)
+            var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
+            ConsoleColor color = Console.ForegroundColor;
+            foreach (var group in grouped)
             {
-                var predictionResult = prediction.Value.Predict(sampleStatement);
-                string predictionMessage = $"10хв ймовірність на {prediction.Key} - {predictionResult.Probability * 100:0.0}%";
-                Console.WriteLine(predictionMessage);
-                if (newEvents && predictionResult.Probability > 0.7)
+                var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == group);
+                Console.ForegroundColor = last.OnOff ? ConsoleColor.Red : ConsoleColor.Green;
+                Console.Write($"{group}: {(last.OnOff ? "тривога" : "немає")}");
+                if (predictionEngines.ContainsKey(group) && !last.OnOff)
                 {
-                    client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash), predictionMessage);
+                    var predictionResult = predictionEngines[group].Predict(sampleStatement);
+                    Console.WriteLine($" ({predictionResult}% за 10хв)");
+                    if (newEvents && predictionResult.Probability > 0.7)
+                    {
+                        client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
+                            $"10хв ймовірність на {group} - {predictionResult.Probability * 100:0.0}%");
+                    }
                 }
+                else { Console.WriteLine("."); }
+                
             }
+            Console.ForegroundColor = color;
         }
 
         public static void Main(string[] args)
@@ -296,15 +276,15 @@ namespace Tryvoga
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             var predictionEngines = events.Count > 0 ? GetPredictionEngines(): new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             
-            using var client = new WTelegram.Client(Config);
+            using var client = new WTelegram.Client(ConfigForTelegramClient);
             var my = client.LoginUserIfNeeded().Result;
-            var x = client.Messages_GetAllChats().Result;
-            Channel tryvoga = (Channel)x.chats[1766138888];
-            Channel tryvogaPrediction = (Channel)x.chats[1766772788];
+            Messages_Chats allChats = client.Messages_GetAllChats().Result;
+            Channel tryvogaChannel = (Channel)allChats.chats[1766138888];
+            Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
-            FillInEvents(client, tryvoga, initialEvents, events.Keys);
+            FillInEvents(client, tryvogaChannel, initialEvents, events.Keys);
 
             foreach (var e in initialEvents)
             {
@@ -319,10 +299,10 @@ namespace Tryvoga
             while (true)
             {
                 int eventsCount = events.Count;
-                FillInEvents(client, tryvoga, events);
+                FillInEvents(client, tryvogaChannel, events);
                 bool newEvents = eventsCount != events.Count;
                 ShowRegions(events);
-                ShowPredictionMessage(client, predictionEngines, events, tryvogaPrediction, newEvents);
+                ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, newEvents);
                 
                 if(DateTime.Now.Minute == 15 && !regenerating)
                 {
