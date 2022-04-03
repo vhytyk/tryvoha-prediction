@@ -237,7 +237,7 @@ namespace TryvogaPrediction
                 if (predictionEngines.ContainsKey(group) && !last.OnOff)
                 {
                     var predictionResult = predictionEngines[group].Predict(sampleStatement);
-                    Console.WriteLine($" ({predictionResult}% за 10хв)");
+                    Console.WriteLine($" ({predictionResult.Probability * 100:0.0}% за 10хв)");
                     if (newEvents && predictionResult.Probability > 0.7)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
