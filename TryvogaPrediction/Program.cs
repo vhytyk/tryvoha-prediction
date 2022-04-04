@@ -234,7 +234,10 @@ namespace TryvogaPrediction
                 = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             foreach (string region in regions)
             {
-                GenerateData(region);
+                if (regenerate)
+                {
+                    GenerateData(region);
+                }
                 result[region] = CreatePredictionEngine(region, regenerate);
             }
             return result;
@@ -309,7 +312,7 @@ namespace TryvogaPrediction
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             var predictionEngines = events.Count > 0
-                ? GetPredictionEngines(events, true)
+                ? GetPredictionEngines(events)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             if (posAvg.Any())
             {
@@ -329,7 +332,6 @@ namespace TryvogaPrediction
             }
 
             init = false;
-            bool regenerating = false;
             while (true)
             {
                 int eventsCount = events.Count;
@@ -337,15 +339,12 @@ namespace TryvogaPrediction
                 bool newEvents = eventsCount != events.Count;
                 ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, tryvogaPredictionTest, newEvents);
 
-                if (DateTime.Now.Minute == 15 && !regenerating)
+                double modelsAgeMins = (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{path}/{predictionEngines.Keys.First()}.zip")).TotalMinutes;
+                if (modelsAgeMins > 60)
                 {
-                    regenerating = true;
-                    predictionEngines = GetPredictionEngines(events, true);
+                    GetPredictionEngines(events, regenerate: true);
                 }
-                if (DateTime.Now.Minute == 16)
-                {
-                    regenerating = false;
-                }
+                
                 Thread.Sleep(10000);
             }
         }
