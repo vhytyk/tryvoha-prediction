@@ -186,9 +186,9 @@ namespace TryvogaPrediction
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             File.WriteAllText($"{path}/{region}.csv", $"RegionsOn;Min10{Environment.NewLine}");
 
-            foreach (var ev in events.Values.Where(e => e.Region != region))
+            foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.OnOff && e.Region != region))
             {
-                var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
+                var previousEvents = events.Values.Where(e => e.Id <= ev.Id && e.Region != region);
                 var grouped = previousEvents.GroupBy(e => e.Region).Select(e => new
                 {
                     Region = e.Key,
@@ -198,7 +198,7 @@ namespace TryvogaPrediction
                 var r = new TryvohaTrainingRecord
                 {
                     RegionsOn = string.Join(" ", grouped.Select(g => regionsSmall[g.Region])),
-                    Min10 = events.Values.Where(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff).Any()
+                    Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff)
                 };
                 File.AppendAllText($"{path}/{region}.csv", $"{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
@@ -280,12 +280,12 @@ namespace TryvogaPrediction
                         Console.ForegroundColor = ConsoleColor.Yellow;
                     }
                     Console.WriteLine($" ({predictionResult.Probability * 100:0.0}%, {predictionResult.Prediction}, {predictionResult.Score})");
-                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
+                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Probability > 0.7)
+                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
@@ -316,7 +316,7 @@ namespace TryvogaPrediction
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             var predictionEngines = events.Count > 0
-                ? GetPredictionEngines(events)
+                ? GetPredictionEngines(events, true)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
 
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
