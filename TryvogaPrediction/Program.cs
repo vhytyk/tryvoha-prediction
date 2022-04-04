@@ -204,7 +204,9 @@ namespace TryvogaPrediction
             }
             Console.WriteLine("done");
         }
-        static List<double> posAvg = new List<double>();
+        static List<double> pos = new List<double>();
+        static List<double> f1 = new List<double>();
+        static List<double> acc = new List<double>();
         static PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord> CreatePredictionEngine(string region, bool regenerate = false)
         {
             Console.Write($"Creating prediction engine for {region}...");
@@ -222,7 +224,9 @@ namespace TryvogaPrediction
             }
             var eval = Evaluate(mlContext, model, splitDataView.TestSet);
             Console.WriteLine($" acc: {eval.Accuracy:0.00}, posrec: {eval.PositiveRecall:0.00}, f1: {eval.F1Score:0.00}");
-            posAvg.Add(eval.PositiveRecall);
+            pos.Add(eval.PositiveRecall);
+            f1.Add(eval.F1Score);
+            acc.Add(eval.Accuracy);
             return mlContext.Model.CreatePredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>(model);
         }
 
@@ -234,7 +238,7 @@ namespace TryvogaPrediction
                 = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
             foreach (string region in regions)
             {
-                if (regenerate)
+                if (regenerate || !File.Exists($"{path}/{region}.csv"))
                 {
                     GenerateData(region);
                 }
@@ -248,7 +252,7 @@ namespace TryvogaPrediction
             Dictionary<int, TryvohaEvent> events,
             Channel tryvogaPrediction,
             Channel tryvogaPredictionTest,
-            bool newEvents)
+            Dictionary<int, TryvohaEvent> newEvents)
         {
             string[] notificationRegions = new string[] { "Закарпатська", "Львівська", "Івано-Франківська" };
             var groupedForPrediction = events.Values.GroupBy(e => e.Region).Select(e => new
@@ -276,12 +280,12 @@ namespace TryvogaPrediction
                         Console.ForegroundColor = ConsoleColor.Yellow;
                     }
                     Console.WriteLine($" ({predictionResult.Probability * 100:0.0}%, {predictionResult.Prediction}, {predictionResult.Score})");
-                    if (newEvents && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
+                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Probability > 0.7 && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (newEvents && predictionResult.Probability > 0.7)
+                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Probability > 0.7)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
@@ -314,10 +318,7 @@ namespace TryvogaPrediction
             var predictionEngines = events.Count > 0
                 ? GetPredictionEngines(events)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
-            if (posAvg.Any())
-            {
-                Console.WriteLine(posAvg.Average());
-            }
+
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
@@ -334,17 +335,21 @@ namespace TryvogaPrediction
             init = false;
             while (true)
             {
-                int eventsCount = events.Count;
+                Dictionary<int, TryvohaEvent> oldEvents = new Dictionary<int, TryvohaEvent>(events);
                 FillInEvents(client, tryvogaChannel, events);
-                bool newEvents = eventsCount != events.Count;
-                ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, tryvogaPredictionTest, newEvents);
+                ShowPredictionMessage(client, predictionEngines, events, tryvogaPredictionChannel, tryvogaPredictionTest, 
+                    events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
+                if (pos.Any() && acc.Any() && f1.Any())
+                {
+                    Console.WriteLine($"model evaluation - acc: {acc.Average():0.00}, posrec: {pos.Average():0.00}, f1: {f1.Average():0.00}");
+                }
 
                 double modelsAgeMins = (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{path}/{predictionEngines.Keys.First()}.zip")).TotalMinutes;
                 if (modelsAgeMins > 60)
                 {
                     GetPredictionEngines(events, regenerate: true);
                 }
-                
+
                 Thread.Sleep(10000);
             }
         }
