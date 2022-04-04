@@ -311,7 +311,10 @@ namespace TryvogaPrediction
             var predictionEngines = events.Count > 0
                 ? GetPredictionEngines(events, true)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
-            Console.WriteLine(posAvg.Average());
+            if (posAvg.Any())
+            {
+                Console.WriteLine(posAvg.Average());
+            }
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
