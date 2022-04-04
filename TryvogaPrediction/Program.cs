@@ -263,7 +263,7 @@ namespace TryvogaPrediction
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(',', groupedForPrediction.Select(g => regionsSmall[g.Region]))
+                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => regionsSmall[g.Region]))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             ConsoleColor color = Console.ForegroundColor;
