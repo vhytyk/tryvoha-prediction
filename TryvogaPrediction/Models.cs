@@ -14,8 +14,10 @@ namespace TryvogaPrediction
     public class TryvohaTrainingRecord
     {
         [LoadColumn(0)]
+        public int Id { get; set; }
+        [LoadColumn(1)]
         public string RegionsOn { get; set; }
-        [LoadColumn(1), ColumnName("Label")]
+        [LoadColumn(2), ColumnName("Label")]
         public bool Min10 { get; set; }
     }
     public class TryvohaPredictionRecord : TryvohaTrainingRecord

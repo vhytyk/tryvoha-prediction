@@ -188,19 +188,23 @@ namespace TryvogaPrediction
 
             foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.OnOff && e.Region != region))
             {
-                var previousEvents = events.Values.Where(e => e.Id <= ev.Id && e.Region != region);
+                var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
                 var grouped = previousEvents.Where(e => e.EventTime >= ev.EventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
                 {
                     Region = e.Key,
                     OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
                     EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
+                if (grouped.Any(g => g.Region == region))
+                {
+                    continue;
+                }
                 var r = new TryvohaTrainingRecord
                 {
                     RegionsOn = string.Join(" ", grouped.Select(g => regionsSmall[g.Region])),
                     Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff)
                 };
-                File.AppendAllText($"{path}/{region}.csv", $"{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
+                File.AppendAllText($"{path}/{region}.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
             Console.WriteLine("done");
         }
