@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using TL;
 using System.Linq;
 using System.Threading;
@@ -279,11 +280,17 @@ namespace TryvogaPrediction
                 if (predictionEngines.ContainsKey(group) && !last.OnOff)
                 {
                     var predictionResult = predictionEngines[group].Predict(sampleStatement);
-                    if (predictionResult.Prediction)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                    }
-                    Console.WriteLine($" ({predictionResult.Probability * 100:0.0}%, {predictionResult.Prediction}, {predictionResult.Score})");
+                    ConsoleColor predictionColor = ConsoleColor.DarkGray;
+                    if (predictionResult.Probability > 0.1)
+                        predictionColor = ConsoleColor.White;
+                    if (predictionResult.Probability > 0.3)
+                        predictionColor = ConsoleColor.Yellow;
+                    if (predictionResult.Probability > 0.5)
+                        predictionColor = ConsoleColor.Magenta;
+                    if (predictionResult.Probability > 0.7)
+                        predictionColor = ConsoleColor.Red;
+                    Console.ForegroundColor = predictionColor;
+                    Console.WriteLine($" (prediction: {predictionResult.Prediction} - {predictionResult.Prediction})");
                     if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction && notificationRegions.Contains(group))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
@@ -320,7 +327,7 @@ namespace TryvogaPrediction
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
             var predictionEngines = events.Count > 0
-                ? GetPredictionEngines(events, true)
+                ? GetPredictionEngines(events)
                 : new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
 
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
@@ -357,5 +364,8 @@ namespace TryvogaPrediction
                 Thread.Sleep(15000);
             }
         }
+
+
+     
     }
 }
