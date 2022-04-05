@@ -189,7 +189,7 @@ namespace TryvogaPrediction
             foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.OnOff && e.Region != region))
             {
                 var previousEvents = events.Values.Where(e => e.Id <= ev.Id && e.Region != region);
-                var grouped = previousEvents.GroupBy(e => e.Region).Select(e => new
+                var grouped = previousEvents.Where(e => e.EventTime >= ev.EventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
                 {
                     Region = e.Key,
                     OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
@@ -255,7 +255,7 @@ namespace TryvogaPrediction
             Dictionary<int, TryvohaEvent> newEvents)
         {
             string[] notificationRegions = new string[] { "Закарпатська", "Львівська", "Івано-Франківська" };
-            var groupedForPrediction = events.Values.GroupBy(e => e.Region).Select(e => new
+            var groupedForPrediction = events.Values.Where(e => e.EventTime >= DateTime.UtcNow.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
                 OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
@@ -350,7 +350,7 @@ namespace TryvogaPrediction
                     GetPredictionEngines(events, regenerate: true);
                 }
 
-                Thread.Sleep(10000);
+                Thread.Sleep(15000);
             }
         }
     }
