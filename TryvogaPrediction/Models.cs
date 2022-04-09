@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.ML.Data;
 
 namespace TryvogaPrediction
@@ -29,5 +30,35 @@ namespace TryvogaPrediction
         public float Probability { get; set; }
 
         public float Score { get; set; }
+    }
+
+    public class OffTryvohaTrainingRecord
+    {
+        [LoadColumn(0)]
+        public int Id { get; set; }
+        [LoadColumn(1)]
+        public string RegionsOn { get; set; }
+        [LoadColumn(2), ColumnName("Label")]
+        public Single DiffMins { get; set; }
+    }
+
+    public class OffTryvohaPredictionRecord: OffTryvohaTrainingRecord
+    {
+        public float Score { get; set; }
+    }
+
+    public class RegionStatus
+    {
+        public bool Status { get; set; }
+        public bool? PredictedOn { get; set; }
+        public double? PredictedOffMinutes { get; set; }
+        public double? ProbabilityOn { get; set; }
+    }
+
+    public class ResultPayload
+    {
+        public DateTime LastUpdateTime { get; set; } = DateTime.UtcNow;
+        public Dictionary<string, RegionStatus> Regions { get; set; }
+        public List<string> ModelEvaluations { get; set; }
     }
 }

@@ -118,8 +118,11 @@ namespace TryvogaPrediction
 
         public void GeneratePredictionEngines(Dictionary<int, TryvohaEvent> events, bool regenerate = false)
         {
+            _pos.Clear();
+            _acc.Clear();
+            _f1.Clear();
             var regions = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key)
-                .Where(e => e != "Луганська" && e != "Донецька" && e != "Херсонська").OrderBy(e => e);
+                .Where(e => e != "Херсонська" && e != "Луганська").OrderBy(e => e);
 
             foreach (string region in regions)
             {
@@ -131,16 +134,25 @@ namespace TryvogaPrediction
             }
         }
 
+        public Tuple<double, double, double> GetModelEvaluationsAvg()
+        {
+            if (_acc.Any() && _pos.Any() && _f1.Any())
+            {
+                return new Tuple<double, double, double>(_acc.Average(), _pos.Average(), _f1.Average());
+            }
 
+            return null;
+        }
 
-        public void ShowPredictionMessage(WTelegram.Client client,
+        public Dictionary<string, TryvohaPredictionRecord> ProcessPrediction(WTelegram.Client client,
            Dictionary<int, TryvohaEvent> events,
            Channel tryvogaPrediction,
            Channel tryvogaPredictionTest,
            Dictionary<int, TryvohaEvent> newEvents)
         {
+            Dictionary<string, TryvohaPredictionRecord> result = new Dictionary<string, TryvohaPredictionRecord>();
             var lastEventTime = events.Values.OrderBy(e => e.Id).LastOrDefault()?.EventTime ?? DateTime.UtcNow;
-            string[] notificationRegions = new string[] { "Закарпатська", "Львівська", "Івано-Франківська" };
+            string[] notificationRegions =  { "Закарпатська", "Львівська", "Івано-Франківська" };
             var groupedForPrediction = events.Values.Where(e => e.EventTime >= lastEventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
@@ -152,45 +164,29 @@ namespace TryvogaPrediction
                 RegionsOn = string.Join(" ", groupedForPrediction.Select(g => _regionsSmall[g.Region]))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
-            ConsoleColor color = Console.ForegroundColor;
-            foreach (var group in grouped)
+            foreach (var region in grouped)
             {
-                var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == group);
-                Console.ForegroundColor = last.OnOff ? ConsoleColor.Red : ConsoleColor.Green;
-                Console.Write($"{group}: {(last.OnOff ? "тривога" : "немає")}");
-                if (_predictionEngines.ContainsKey(group) && !last.OnOff)
+                var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == region);
+                
+                if (_predictionEngines.ContainsKey(region) && !last.OnOff)
                 {
-                    var predictionResult = _predictionEngines[group].Predict(sampleStatement);
-                    ConsoleColor predictionColor = ConsoleColor.DarkGray;
-                    if (predictionResult.Probability > 0.1)
-                        predictionColor = ConsoleColor.Gray;
-                    if (predictionResult.Probability > 0.3)
-                        predictionColor = ConsoleColor.DarkYellow;
-                    if (predictionResult.Probability > 0.5)
-                        predictionColor = ConsoleColor.Yellow;
-                    if (predictionResult.Probability > 0.7)
-                        predictionColor = ConsoleColor.Red;
-                    Console.ForegroundColor = predictionColor;
-                    Console.WriteLine($" ({predictionResult.Prediction} - {predictionResult.Probability * 100:0.0}%)");
-                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction && notificationRegions.Contains(group))
+                    var predictionResult = _predictionEngines[region].Predict(sampleStatement);
+                    result[region] = predictionResult;
+
+                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction && notificationRegions.Contains(region))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
-                            $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
+                            $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
                     if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
-                            $"{group} область - ймовірність {predictionResult.Probability * 100:0.0}%");
+                            $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
                 }
-                else { Console.WriteLine("."); }
 
             }
-            Console.ForegroundColor = color;
-            if (_pos.Any() && _acc.Any() && _f1.Any())
-            {
-                Console.WriteLine($"model evaluation - acc: {_acc.Average():0.00}, posrec: {_pos.Average():0.00}, f1: {_f1.Average():0.00}");
-            }
+
             double modelsAgeMins = _predictionEngines.Any()
                 ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Program.DataPath}/{_predictionEngines.Keys.First()}On.zip")).TotalMinutes
                 : double.MaxValue;
@@ -198,6 +194,8 @@ namespace TryvogaPrediction
             {
                 GeneratePredictionEngines(events, regenerate: true);
             }
+
+            return result;
         }
     }
 }

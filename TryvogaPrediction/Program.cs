@@ -4,17 +4,20 @@ using TL;
 using System.Linq;
 using System.Threading;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.VisualBasic.FileIO;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 
 namespace TryvogaPrediction
 {
     public class Program
     {
-        public static string DataPath = "/tmp/tryvoha";
-        public static string DataFileName = $"{DataPath}/tryvoha.csv";
+        public static string DataPath;
+        public static string DataFileName;
 
         public static IConfiguration Config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true)
@@ -130,11 +133,13 @@ namespace TryvogaPrediction
             }
             SaveToFile(events);
         }
-        
+
         public static void Main(string[] args)
         {
-           
-            WTelegram.Helpers.Log = (i, s) => { };
+            DataPath = Config["dataPath"] ?? "/tmp/tryvoha";
+            DataFileName = $"{DataPath}/tryvoha.csv";
+
+            //WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
 
             using var client = new WTelegram.Client(ConfigForTelegramClient);
@@ -150,12 +155,15 @@ namespace TryvogaPrediction
             }
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
+            TryvohaPredictionServiceOff serviceOff = new TryvohaPredictionServiceOff();
             TryvohaPredictionServiceOn serviceOn = new TryvohaPredictionServiceOn();
             if (events.Count > 0)
             {
                 serviceOn.GeneratePredictionEngines(events);
+                serviceOff.GeneratePredictionEngines(events);
             }
 
+            var avg = serviceOff.GetModelEvaluationsAvg();
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
@@ -174,14 +182,127 @@ namespace TryvogaPrediction
             {
                 Dictionary<int, TryvohaEvent> oldEvents = new Dictionary<int, TryvohaEvent>(events);
                 FillInEvents(client, tryvogaChannel, events);
-                serviceOn.ShowPredictionMessage(client, events, tryvogaPredictionChannel, tryvogaPredictionTest, 
-                    events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
 
+                Dictionary<string, bool> status = events.GroupBy(e => e.Value.Region)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Value.EventTime).Last().Value.OnOff);
+
+                Dictionary<string, TryvohaPredictionRecord> predictionsOn =
+                    serviceOn.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
+                        events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
+                Tuple<double, double, double> modelEvalsOn = serviceOn.GetModelEvaluationsAvg();
+
+                Dictionary<string, OffTryvohaPredictionRecord> predictionsOff =
+                    serviceOff.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
+                        events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
+                Tuple<double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
+                var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
+                ShowInConsole(payload);
+                SendPayload(payload);
                 Thread.Sleep(10000);
             }
         }
 
+        static void SendPayload(ResultPayload payload)
+        {
+            try
+            {
+                Console.Write($"sending payload to {Config["payload_url"]}...");
+                var httpWebRequest = (HttpWebRequest) WebRequest.Create(Config["payload_url"]);
+                httpWebRequest.ContentType = "application/json";
+                httpWebRequest.Method = "POST";
 
-     
+                using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
+                {
+                    string json = JsonConvert.SerializeObject(payload);
+
+                    streamWriter.Write(json);
+                }
+
+                httpWebRequest.GetResponse();
+            }
+            catch
+            {
+                Console.WriteLine("fail");
+                return;
+            }
+            Console.WriteLine("done");
+        }
+
+        static ResultPayload GetPayload(Dictionary<string, bool> status,
+            Dictionary<string, TryvohaPredictionRecord> predictionsOn,
+            Tuple<double, double, double> modelEvalsOn,
+            Dictionary<string, OffTryvohaPredictionRecord> predictionsOff,
+            Tuple<double, double> modelEvalsOff)
+        {
+            ResultPayload result = new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>(),
+                ModelEvaluations = new List<string>()
+            };
+            foreach (var region in status.Keys)
+            {
+                bool isOn = status[region];
+                var predictionOn = (predictionsOn.ContainsKey(region) && !isOn) ? predictionsOn[region] : null;
+                var predictionOff = (predictionsOff.ContainsKey(region) && isOn) ? predictionsOff[region] : null;
+                result.Regions[region] = new RegionStatus
+                {
+                    Status = isOn,
+                    PredictedOn = predictionOn?.Prediction,
+                    ProbabilityOn = predictionOn?.Probability,
+                    PredictedOffMinutes = predictionOff?.Score,
+                };
+            }
+
+            if (modelEvalsOn != null)
+            {
+                result.ModelEvaluations.Add($"model 'ON' - acc: {modelEvalsOn.Item1:0.00}, posrec: {modelEvalsOn.Item2:0.00}, f1: {modelEvalsOn.Item3:0.00}");
+            }
+            if (modelEvalsOff != null)
+            {
+                result.ModelEvaluations.Add($"model 'OFF' - loss: {modelEvalsOff.Item2:0.0}, rsqr: {modelEvalsOff.Item1:0.00}");
+            }
+
+            return result;
+        }
+
+        static void ShowInConsole(ResultPayload payload)
+        {
+            ConsoleColor standardColor = Console.ForegroundColor;
+
+            foreach (var region in payload.Regions.Keys.OrderBy(s => s))
+            {
+
+                bool isOn = payload.Regions[region].Status;
+                Console.ForegroundColor = isOn ? ConsoleColor.Red : ConsoleColor.Green;
+                Console.Write($"{region}: {(isOn ? "тривога" : "немає")}");
+
+
+                if (payload.Regions[region].PredictedOn.HasValue)
+                {
+                    var probabilty = payload.Regions[region].ProbabilityOn.Value;
+                    ConsoleColor predictionColor = ConsoleColor.DarkGray;
+                    if (probabilty > 0.1)
+                        predictionColor = ConsoleColor.Gray;
+                    if (probabilty > 0.3)
+                        predictionColor = ConsoleColor.DarkYellow;
+                    if (probabilty > 0.5)
+                        predictionColor = ConsoleColor.Yellow;
+                    if (probabilty > 0.7)
+                        predictionColor = ConsoleColor.Red;
+                    Console.ForegroundColor = predictionColor;
+                    Console.Write($" ({payload.Regions[region].PredictedOn}, {probabilty * 100:0.0}%)");
+                }
+
+                if (payload.Regions[region].PredictedOffMinutes.HasValue)
+                {
+                    Console.Write($" ({payload.Regions[region].PredictedOffMinutes:0} mins)");
+                }
+                Console.WriteLine();
+            }
+
+            Console.ForegroundColor = standardColor;
+            payload.ModelEvaluations.ForEach(Console.WriteLine);
+        }
+
     }
 }
