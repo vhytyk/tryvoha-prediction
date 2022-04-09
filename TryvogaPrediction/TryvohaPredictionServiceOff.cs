@@ -71,16 +71,15 @@ namespace TryvogaPrediction
                 {
                     continue;
                 }
+                var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
+                var groupedOn = previousEvents.Where(e => e.Region != region && e.EventTime >= ev.EventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
+                {
+                    Region = e.Key,
+                    OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
+                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
+                }).OrderBy(g => g.EventTime);
                 while (current < end)
                 {
-                    var previousEvents = events.Values.Where(e => e.Id <= ev.Id);
-                    var groupedOn = previousEvents.Where(e => e.Region != region && e.EventTime >= ev.EventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
-                    {
-                        Region = e.Key,
-                        OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                        EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
-                    }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
-
                     int timeDiffRegion = GetTimeDiff(end, current);
                     var r = new OffTryvohaTrainingRecord
                     {
@@ -175,7 +174,7 @@ namespace TryvogaPrediction
                 Region = e.Key,
                 OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
                 EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
-            }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
+            }).OrderBy(g => g.EventTime);
             OffTryvohaTrainingRecord sampleStatement = new OffTryvohaTrainingRecord
             {
                 RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
