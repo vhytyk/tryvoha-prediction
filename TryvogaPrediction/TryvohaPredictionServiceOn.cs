@@ -48,7 +48,9 @@ namespace TryvogaPrediction
         void GenerateData(string region)
         {
             Console.Write($"Generating train set (on) for {region}...");
-            Dictionary<int, TryvohaEvent> events = Program.LoadFromFile();
+            Dictionary<int, TryvohaEvent> events = Program.LoadFromFile()
+                .Where(e => e.Value.EventTime > DateTime.UtcNow.AddMonths(-1))
+                .ToDictionary(e => e.Key, e => e.Value);
             File.WriteAllText($"{Program.DataPath}/{region}On.csv", $"RegionsOn;Min10{Environment.NewLine}");
 
             foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.OnOff && e.Region != region))
