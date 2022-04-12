@@ -48,12 +48,14 @@ namespace TryvogaPrediction
         int GetTimeDiff(DateTime to, DateTime from)
         {
             var timeDiff = (to - from).TotalMinutes;
-            if (timeDiff > 120)
+            var timeDiffRes = ((int)(timeDiff / 15)) * 15;
+            if (timeDiff > 61)
             {
-                return 200;
+                return 100;
             }
-            return (int)timeDiff;
+            return timeDiffRes;
         }
+
 
         void GenerateData(string region)
         {
@@ -70,8 +72,7 @@ namespace TryvogaPrediction
                 {
                     Region = e.Key,
                     OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue,
-                    PreviousEventTime = e.OrderBy(i => i.Id).TakeLast(2).FirstOrDefault()?.EventTime ?? DateTime.MinValue
+                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
                 if (grouped.Any(g => g.Region == region))
                 {
@@ -79,7 +80,7 @@ namespace TryvogaPrediction
                 }
                 var r = new TryvohaTrainingRecord
                 {
-                    RegionsOn = string.Join(" ", grouped.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(g.PreviousEventTime, g.EventTime)}")),
+                    RegionsOn = string.Join(" ", grouped.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(ev.EventTime, g.EventTime)}")),
                     Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff)
                 };
                 File.AppendAllText($"{Program.DataPath}/{region}On.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
@@ -170,12 +171,11 @@ namespace TryvogaPrediction
             {
                 Region = e.Key,
                 OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue,
-                PreviousEventTime = e.OrderBy(i => i.Id).TakeLast(2).FirstOrDefault()?.EventTime ?? DateTime.MinValue
+                EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(g.PreviousEventTime, g.EventTime)}"))
+                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(lastEventTime, g.EventTime)}"))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
