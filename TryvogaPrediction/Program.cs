@@ -18,6 +18,7 @@ namespace TryvogaPrediction
     {
         public static string DataPath;
         public static string DataFileName;
+        public static bool SendNotifications;
 
         public static IConfiguration Config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true)
@@ -136,6 +137,7 @@ namespace TryvogaPrediction
 
         public static void Main(string[] args)
         {
+            SendNotifications = bool.Parse(Config["sendNotifications"] ?? "false");
             DataPath = Config["dataPath"] ?? "/tmp/tryvoha";
             DataFileName = $"{DataPath}/tryvoha.csv";
 

@@ -45,6 +45,16 @@ namespace TryvogaPrediction
         private Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>> _predictionEngines 
             = new Dictionary<string, PredictionEngine<TryvohaTrainingRecord, TryvohaPredictionRecord>>();
 
+        int GetTimeDiff(DateTime to, DateTime from)
+        {
+            var timeDiff = (to - from).TotalMinutes;
+            if (timeDiff > 120)
+            {
+                return 200;
+            }
+            return (int)timeDiff;
+        }
+
         void GenerateData(string region)
         {
             Console.Write($"Generating train set (on) for {region}...");
@@ -60,7 +70,8 @@ namespace TryvogaPrediction
                 {
                     Region = e.Key,
                     OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
+                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue,
+                    PreviousEventTime = e.OrderBy(i => i.Id).TakeLast(2).FirstOrDefault()?.EventTime ?? DateTime.MinValue
                 }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
                 if (grouped.Any(g => g.Region == region))
                 {
@@ -68,7 +79,7 @@ namespace TryvogaPrediction
                 }
                 var r = new TryvohaTrainingRecord
                 {
-                    RegionsOn = string.Join(" ", grouped.Select(g => _regionsSmall[g.Region])),
+                    RegionsOn = string.Join(" ", grouped.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(g.PreviousEventTime, g.EventTime)}")),
                     Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff)
                 };
                 File.AppendAllText($"{Program.DataPath}/{region}On.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
@@ -159,28 +170,30 @@ namespace TryvogaPrediction
             {
                 Region = e.Key,
                 OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.OnOff ?? false,
-                EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
+                EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue,
+                PreviousEventTime = e.OrderBy(i => i.Id).TakeLast(2).FirstOrDefault()?.EventTime ?? DateTime.MinValue
             }).Where(g => g.OnOff).OrderBy(g => g.EventTime);
             TryvohaTrainingRecord sampleStatement = new TryvohaTrainingRecord
             {
-                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => _regionsSmall[g.Region]))
+                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(g.PreviousEventTime, g.EventTime)}"))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
             {
-                var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == region);
-                
+                var last = events.Values.Where(e => e.Region == region).OrderBy(e => e.EventTime).Last();
+                var previous = events.Values.Where(e => e.Region == region).OrderBy(e => e.EventTime).TakeLast(2).First();
+
                 if (_predictionEngines.ContainsKey(region) && !last.OnOff)
                 {
                     var predictionResult = _predictionEngines[region].Predict(sampleStatement);
                     result[region] = predictionResult;
 
-                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction && notificationRegions.Contains(region))
+                    if (Program.SendNotifications && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (newEvents.Any(e => e.Value.OnOff) && predictionResult.Prediction)
+                    if (Program.SendNotifications && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
