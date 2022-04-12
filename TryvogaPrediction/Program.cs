@@ -161,7 +161,7 @@ namespace TryvogaPrediction
             TryvohaPredictionServiceOn serviceOn = new TryvohaPredictionServiceOn();
             if (events.Count > 0)
             {
-                serviceOn.GeneratePredictionEngines(events, true);
+                serviceOn.GeneratePredictionEngines(events);
                 serviceOff.GeneratePredictionEngines(events);
             }
 
