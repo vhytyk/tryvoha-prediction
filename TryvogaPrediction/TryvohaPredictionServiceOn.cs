@@ -188,12 +188,12 @@ namespace TryvogaPrediction
                     var predictionResult = _predictionEngines[region].Predict(sampleStatement);
                     result[region] = predictionResult;
 
-                    if (Program.SendNotifications && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
+                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (Program.SendNotifications && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
+                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
