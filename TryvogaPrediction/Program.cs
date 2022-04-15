@@ -20,6 +20,35 @@ namespace TryvogaPrediction
         public static string DataFileName;
         public static bool SendNotifications;
 
+        public static Dictionary<string, string> RegionsPlates = new Dictionary<string, string>
+        {
+            { "Вінницька", "AB" },
+            { "Волинська", "AC" },
+            { "Дніпропетровська", "AE" },
+            { "Донецька", "AH" },
+            { "Житомирська", "AM" },
+            { "Закарпатська", "AO" },
+            { "Запорізька", "AP" },
+            { "Івано-Франківська", "AT" },
+            { "Київська", "AI" },
+            { "Кіровоградська", "BA" },
+            { "Луганська", "BB" },
+            { "Львівська", "BC" },
+            { "Миколаївська", "BE" },
+            { "Одеська", "BH" },
+            { "Полтавська", "BI" },
+            { "Рівненська", "BK" },
+            { "Сумська", "BM" },
+            { "Тернопільська", "BO" },
+            { "Харківська", "AX" },
+            { "Херсонська", "BT" },
+            { "Хмельницька", "BX" },
+            { "Черкаська", "CA" },
+            { "Чернігівська", "CB" },
+            { "Чернівецька", "CE" }
+
+        };
+
         public static IConfiguration Config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true)
                 .Build();

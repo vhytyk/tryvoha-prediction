@@ -11,34 +11,6 @@ namespace TryvogaPrediction
 {
     public class TryvohaPredictionServiceOff
     {
-        private Dictionary<string, string> _regionsSmall = new Dictionary<string, string>
-        {
-            { "Вінницька", "AB" },
-            { "Волинська", "AC" },
-            { "Дніпропетровська", "AE" },
-            { "Донецька", "AH" },
-            { "Житомирська", "AM" },
-            { "Закарпатська", "AO" },
-            { "Запорізька", "AP" },
-            { "Івано-Франківська", "AT" },
-            { "Київська", "AI" },
-            { "Кіровоградська", "BA" },
-            { "Луганська", "BB" },
-            { "Львівська", "BC" },
-            { "Миколаївська", "BE" },
-            { "Одеська", "BH" },
-            { "Полтавська", "BI" },
-            { "Рівненська", "BK" },
-            { "Сумська", "BM" },
-            { "Тернопільська", "BO" },
-            { "Харківська", "AX" },
-            { "Херсонська", "BT" },
-            { "Хмельницька", "BX" },
-            { "Черкаська", "CA" },
-            { "Чернігівська", "CB" },
-            { "Чернівецька", "CE" }
-
-        };
         private List<double> _loss = new List<double>();
         private List<double> _rsqr = new List<double>();
         private Dictionary<string, PredictionEngine<OffTryvohaTrainingRecord, OffTryvohaPredictionRecord>> _predictionEngines 
@@ -85,7 +57,7 @@ namespace TryvogaPrediction
                     int timeDiffRegion = GetTimeDiff(end, current);
                     var r = new OffTryvohaTrainingRecord
                     {
-                        RegionsOn = string.Join(" ", groupedOn.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(current, g.EventTime)}")),
+                        RegionsOn = string.Join(" ", groupedOn.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(current, g.EventTime)}")),
                         DiffMins = timeDiffRegion
                     };
                     File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{ev.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
@@ -179,7 +151,7 @@ namespace TryvogaPrediction
             }).OrderBy(g => g.EventTime);
             OffTryvohaTrainingRecord sampleStatement = new OffTryvohaTrainingRecord
             {
-                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{_regionsSmall[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
+                RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
             };
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
