@@ -212,7 +212,7 @@ namespace TryvogaPrediction
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
             FillInEvents(client, tryvogaChannel, initialEvents, events.Keys);
 
-            foreach (var e in initialEvents)
+            foreach (var e in initialEvents) 
             {
                 if (!events.ContainsKey(e.Key))
                 {
@@ -287,6 +287,11 @@ namespace TryvogaPrediction
 
             bool needToShow = false;
             Dictionary<string, RegionStatus> newStatuses = payload.Regions.Where(g => notificationRegions.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+            if(OldStatuses == null && !newStatuses.Any(s => s.Value.Tryvoha || (s.Value.PredictedOn.HasValue && s.Value.PredictedOn.Value)))
+            {
+                OldStatuses = new Dictionary<string, RegionStatus>(newStatuses);
+                return;
+            }
             foreach (var region in newStatuses)
             {
                 var newStatus = region.Value;
