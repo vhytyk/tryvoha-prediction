@@ -18,66 +18,49 @@ namespace TryvogaPrediction
             = new Dictionary<string, PredictionEngine<TryvohaOffTrainingRecord, TryvohaOffPredictionRecord>>();
 
         private const int minStep = 1;
+        private const int limit = 120;
         int GetTimeDiff(DateTime to, DateTime from)
         {
             var timeDiff = (to - from).TotalMinutes;
             var timeDiffRes = ((int)(timeDiff / minStep)) * minStep;
-            if (timeDiff > 120)
+            if (timeDiff > limit - 1)
             {
-                return 200;
+                return limit;
             }
             return timeDiffRes;
         }
 
         void GenerateData(string region)
         {
+          
             Console.Write($"Generating train set (off) for {region}...");
             Dictionary<int, TryvohaEvent> events = Program.LoadFromFile()
                 .Where(e => e.Value.EventTime > DateTime.UtcNow.AddMonths(-1))
                 .ToDictionary(e => e.Key, e => e.Value);
-            File.WriteAllText($"{Program.DataPath}/{region}Off.csv", $"Id;RegionsOn;DiffMins{Environment.NewLine}");
+            File.WriteAllText($"{Program.DataPath}/{region}Off.csv", $"Id;RegionsMinutes;DiffMins{Environment.NewLine}");
 
             foreach (var current in events.Values.OrderBy(e => e.Id).Where(e => e.Region == region && e.Tryvoha))
             {
                 var currentTime = current.EventTime;
                 var end = events.Values.OrderBy(e => e.EventTime)
                     .FirstOrDefault(e => e.Id > current.Id && e.Region == region && !e.Tryvoha)?.EventTime ?? DateTime.UtcNow;
-                if (GetTimeDiff(end, currentTime) == 200)
-                {
+                if(GetTimeDiff(end, currentTime) == limit) {
                     continue;
                 }
-                var previousEvents = events.Values.Where(e => e.Id <= current.Id);
-                string[] regionGroups = Program.RegionsGroups.First(g => g.Value.Contains(region)).Value;
-                var grouped = previousEvents.Where(e => e.Region != region && e.EventTime >= currentTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
-                {
-                    Region = e.Key,
-                    Tryvoha = e.OrderBy(i => i.Id).LastOrDefault()?.Tryvoha ?? false,
-                    EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
-                }).OrderBy(g => g.EventTime);
                 while (currentTime <= end)
                 {
-                    //var groupedOn = grouped.Where(g => g.Tryvoha);
-                    //var groupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30));
-                    //var closeGroupedOn = grouped.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
-                    //var closeGroupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30) && regionGroups.Contains(g.Region));
-                    int timeDiffRegion = GetTimeDiff(end, currentTime);
-                    var r = new TryvohaOffTrainingRecord
+                    var previousEvents = events.Values.Where(e => e.EventTime <= currentTime);
+                    var grouped = previousEvents.GroupBy(e => e.Region).Select(e => new
                     {
-                        RegionsOn = string.Join(" ", grouped.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
-                        CloseRegionsOn = string.Join(" ", grouped.Where(g => regionGroups.Contains(g.Region)).Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
-                        //RegionsOff = string.Join(" ", groupedOffRecently.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
-                        //RegionsOnCount = groupedOn.Count(),
-                        //RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        //RegionsRecentlyOffCount = groupedOffRecently.Count(),
-                        //RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        //CloseRegionsOnCount = closeGroupedOn.Count(),
-                        //CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        //CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
-                        //CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        DiffMins = timeDiffRegion
-                    };
-                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOn};{r.CloseRegionsOn};{r.DiffMins}{Environment.NewLine}");
-                    //File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOnCount};{r.RegionsOnMinutes};{r.RegionsRecentlyOffCount};{r.RegionsRecentlyOffMinutes};{r.CloseRegionsOnCount};{r.CloseRegionsOnMinutes};{r.CloseRegionsRecentlyOffCount};{r.CloseRegionsRecentlyOffMinutes};{(r.DiffMins)}{Environment.NewLine}");
+                        Region = e.Key,
+                        Tryvoha = e.OrderBy(i => i.Id).LastOrDefault()?.Tryvoha ?? false,
+                        EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
+                    }).OrderBy(g => g.Region).ToList();
+                    var allGrouped = Program.RegionsPlates.Keys.OrderBy(g => g).Select(g => grouped.FirstOrDefault(gr => gr.Region == g) ?? new { Region = g, Tryvoha = false, EventTime = DateTime.MinValue }).ToList();
+                    int timeDiffRegion = GetTimeDiff(end, currentTime);
+                    List<float> timeDiffs = allGrouped.Select(r => GetTimeDiff(currentTime, r.EventTime) * (float)(r.Tryvoha ? 1 : -1)).ToList();
+                 
+                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{string.Join(';', timeDiffs)};{timeDiffRegion}{Environment.NewLine}");
                     currentTime = currentTime.AddMinutes(minStep);
                 }
 
@@ -86,23 +69,13 @@ namespace TryvogaPrediction
         }
         ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
-            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "FeaturesRegionsOn", inputColumnName: nameof(TryvohaOffPredictionRecord.RegionsOn))
-              .Append(mlContext.Transforms.Text.FeaturizeText(outputColumnName: "FeaturesCloseRegionsOn", inputColumnName: nameof(TryvohaOffPredictionRecord.CloseRegionsOn)))
-              .Append(mlContext.Transforms.Concatenate("Features", "FeaturesRegionsOn", "FeaturesCloseRegionsOn"))
-             .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"))
-            //var estimator = mlContext.Transforms.Concatenate(outputColumnName: "Features",
-            //                    nameof(TryvohaOffTrainingRecord.RegionsOnCount),
-            //                    nameof(TryvohaOffTrainingRecord.RegionsOnMinutes),
-            //                    nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffCount),
-            //                    nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffMinutes),
-            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsOnCount),
-            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsOnMinutes),
-            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffCount),
-            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffMinutes))
-            //    .Append(mlContext.Transforms.NormalizeMeanVariance("Features",
-            //                useCdf: true))
+            var estimator = mlContext.Transforms.NormalizeMeanVariance("Features", "RegionsMinutes", useCdf: true)
                 .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"));
+
+           //var estimator = mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "RegionsMinutes");
+
             var model = estimator.Fit(splitTrainSet);
+            var preview = model.Transform(splitTrainSet).Preview(10);
             return model;
         }
 
@@ -149,6 +122,10 @@ namespace TryvogaPrediction
 
             foreach (string region in regions)
             {
+                //if(region != "Закарпатська")
+                //{
+                //    continue;
+                //}
                 if (regenerate || !File.Exists($"{Program.DataPath}/{region}Off.csv"))
                 {
                     GenerateData(region);
@@ -182,10 +159,10 @@ namespace TryvogaPrediction
                 EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
             }).OrderBy(g => g.EventTime);
 
-            
+
             var groupedOn = groupedForPrediction.Where(g => g.Tryvoha);
             var groupedOffRecently = groupedForPrediction.Where(g => !g.Tryvoha && g.EventTime > DateTime.UtcNow.AddMinutes(-30));
-        
+
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
             {
@@ -203,7 +180,7 @@ namespace TryvogaPrediction
                     //CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
                     //CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
                     //CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
-                    RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
+                    //RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
                 };
 
                 var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == region);

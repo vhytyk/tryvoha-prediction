@@ -200,7 +200,7 @@ namespace TryvogaPrediction
             if (events.Count > 0)
             {
                 serviceOn.GeneratePredictionEngines(events);
-                serviceOff.GeneratePredictionEngines(events);
+                serviceOff.GeneratePredictionEngines(events, true);
             }
 
             var avg = serviceOff.GetModelEvaluationsAvg();
