@@ -64,6 +64,8 @@ namespace TryvogaPrediction
                     var r = new TryvohaOffTrainingRecord
                     {
                         RegionsOn = string.Join(" ", grouped.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
+                        CloseRegionsOn = string.Join(" ", grouped.Where(g => regionGroups.Contains(g.Region)).Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
+                        //RegionsOff = string.Join(" ", groupedOffRecently.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
                         //RegionsOnCount = groupedOn.Count(),
                         //RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
                         //RegionsRecentlyOffCount = groupedOffRecently.Count(),
@@ -74,7 +76,7 @@ namespace TryvogaPrediction
                         //CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
                         DiffMins = timeDiffRegion
                     };
-                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
+                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOn};{r.CloseRegionsOn};{r.DiffMins}{Environment.NewLine}");
                     //File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOnCount};{r.RegionsOnMinutes};{r.RegionsRecentlyOffCount};{r.RegionsRecentlyOffMinutes};{r.CloseRegionsOnCount};{r.CloseRegionsOnMinutes};{r.CloseRegionsRecentlyOffCount};{r.CloseRegionsRecentlyOffMinutes};{(r.DiffMins)}{Environment.NewLine}");
                     currentTime = currentTime.AddMinutes(minStep);
                 }
@@ -84,7 +86,9 @@ namespace TryvogaPrediction
         }
         ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
-            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TryvohaOffPredictionRecord.RegionsOn))
+            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "FeaturesRegionsOn", inputColumnName: nameof(TryvohaOffPredictionRecord.RegionsOn))
+              .Append(mlContext.Transforms.Text.FeaturizeText(outputColumnName: "FeaturesCloseRegionsOn", inputColumnName: nameof(TryvohaOffPredictionRecord.CloseRegionsOn)))
+              .Append(mlContext.Transforms.Concatenate("Features", "FeaturesRegionsOn", "FeaturesCloseRegionsOn"))
              .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"))
             //var estimator = mlContext.Transforms.Concatenate(outputColumnName: "Features",
             //                    nameof(TryvohaOffTrainingRecord.RegionsOnCount),

@@ -203,8 +203,8 @@ namespace TryvogaPrediction
                 serviceOff.GeneratePredictionEngines(events);
             }
 
-            //var avg = serviceOff.GetModelEvaluationsAvg();
-            //Console.WriteLine($"model 'OFF' - loss: {avg.Item2:0.0}, rsqr: {avg.Item1:0.00}, mae: {avg.Item3: 0.00}");
+            var avg = serviceOff.GetModelEvaluationsAvg();
+            Console.WriteLine($"model 'OFF' - loss: {avg.Item2:0.0}, rsqr: {avg.Item1:0.00}, mae: {avg.Item3: 0.00}");
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");

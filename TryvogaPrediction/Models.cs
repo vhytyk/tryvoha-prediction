@@ -38,7 +38,13 @@ namespace TryvogaPrediction
         public int Id { get; set; }
         [LoadColumn(1)]
         public string RegionsOn { get; set; }
-        [LoadColumn(2), ColumnName("Label")]
+        [LoadColumn(2)]
+        public string CloseRegionsOn { get; set; }
+        //[LoadColumn(3)]
+        //public string RegionsOff { get; set; }
+        //[LoadColumn(4)]
+        //public string CloseRegionsOff { get; set; }
+        [LoadColumn(3), ColumnName("Label")]
         public Single DiffMins { get; set; }
 
         //[LoadColumn(1)]
