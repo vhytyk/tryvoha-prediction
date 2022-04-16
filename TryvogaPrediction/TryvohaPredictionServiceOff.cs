@@ -172,16 +172,34 @@ namespace TryvogaPrediction
             var groupedForPrediction = events.Values.Where(e => e.EventTime >= lastEventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
-                OnOff = e.OrderBy(i => i.Id).LastOrDefault()?.Tryvoha ?? false,
+                Tryvoha = e.OrderBy(i => i.Id).LastOrDefault()?.Tryvoha ?? false,
                 EventTime = e.OrderBy(i => i.Id).LastOrDefault()?.EventTime ?? DateTime.MinValue
             }).OrderBy(g => g.EventTime);
-            TryvohaOffTrainingRecord sampleStatement = new TryvohaOffTrainingRecord
-            {
-                //RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
-            };
+
+            
+            var groupedOn = groupedForPrediction.Where(g => g.Tryvoha);
+            var groupedOffRecently = groupedForPrediction.Where(g => !g.Tryvoha && g.EventTime > DateTime.UtcNow.AddMinutes(-30));
+        
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
             {
+                string[] regionGroups = Program.RegionsGroups.First(g => g.Value.Contains(region)).Value;
+                var closeGroupedOn = groupedForPrediction.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
+                var closeGroupedOffRecently = groupedForPrediction.Where(g => !g.Tryvoha && g.EventTime > DateTime.UtcNow.AddMinutes(-30) && regionGroups.Contains(g.Region));
+
+                TryvohaOffTrainingRecord sampleStatement = new TryvohaOffTrainingRecord
+                {
+                    RegionsOnCount = groupedOn.Count(),
+                    RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    RegionsRecentlyOffCount = groupedOffRecently.Count(),
+                    RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    CloseRegionsOnCount = closeGroupedOn.Count(),
+                    CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
+                    CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    //RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
+                };
+
                 var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == region);
 
                 if (_predictionEngines.ContainsKey(region) && last.Tryvoha)
