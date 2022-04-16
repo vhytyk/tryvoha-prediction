@@ -49,6 +49,15 @@ namespace TryvogaPrediction
 
         };
 
+        public static Dictionary<string, string[]> RegionsGroups = new Dictionary<string, string[]>
+        {
+            { "Захід", new []{ "Закарпатська", "Львівська", "Івано-Франківська", "Чернівецька", "Тернопільська", "Хмельницька", "Рівненська", "Волинська" } },
+            { "Південний схід", new []{ "Луганська", "Харківська", "Донецька", "Запорізька", "Херсонська", "Миколаївська", "Одеська", "Дніпропетровська" } },
+            { "Північний центр", new []{ "Житомирська", "Київська", "Чернігівська", "Сумська", "Вінницька", "Черкаська", "Кіровоградська", "Полтавська" } },
+        };
+
+
+
         public static IConfiguration Config = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: true)
                 .Build();
@@ -105,7 +114,7 @@ namespace TryvogaPrediction
                     Region = (regionOn.Success
                     ? regionOn.Groups[1].Value
                     : regionOff.Groups[1].Value).Replace(';', '.').Trim('.'),
-                    OnOff = regionOn.Success
+                    Tryvoha = regionOn.Success
                 };
             }
             return null;
@@ -116,7 +125,7 @@ namespace TryvogaPrediction
             File.WriteAllText(DataFileName, $"Id;EventTime;Region;OnOff{Environment.NewLine}");
             foreach (var tryvoha in events.Values.OrderBy(e => e.Id))
             {
-                File.AppendAllText(DataFileName, $"{tryvoha.Id};{tryvoha.EventTime.ToString("yyyy-MM-dd HH:mm:ss")};{tryvoha.Region};{tryvoha.OnOff}{Environment.NewLine}");
+                File.AppendAllText(DataFileName, $"{tryvoha.Id};{tryvoha.EventTime.ToString("yyyy-MM-dd HH:mm:ss")};{tryvoha.Region};{tryvoha.Tryvoha}{Environment.NewLine}");
             }
         }
 
@@ -143,7 +152,7 @@ namespace TryvogaPrediction
                     e.Id = int.Parse(fields[0]);
                     e.EventTime = DateTime.Parse(fields[1]);
                     e.Region = fields[2];
-                    e.OnOff = bool.Parse(fields[3]);
+                    e.Tryvoha = bool.Parse(fields[3]);
                     result.Add(e.Id, e);
                 }
             }
@@ -194,7 +203,8 @@ namespace TryvogaPrediction
                 serviceOff.GeneratePredictionEngines(events);
             }
 
-            var avg = serviceOff.GetModelEvaluationsAvg();
+            //var avg = serviceOff.GetModelEvaluationsAvg();
+            //Console.WriteLine($"model 'OFF' - loss: {avg.Item2:0.0}, rsqr: {avg.Item1:0.00}, mae: {avg.Item3: 0.00}");
             Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
@@ -215,17 +225,17 @@ namespace TryvogaPrediction
                 FillInEvents(client, tryvogaChannel, events);
 
                 Dictionary<string, bool> status = events.GroupBy(e => e.Value.Region)
-                    .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Value.EventTime).Last().Value.OnOff);
+                    .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Value.EventTime).Last().Value.Tryvoha);
 
                 Dictionary<string, TryvohaPredictionRecord> predictionsOn =
                     serviceOn.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
                         events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
                 Tuple<double, double, double> modelEvalsOn = serviceOn.GetModelEvaluationsAvg();
 
-                Dictionary<string, OffTryvohaPredictionRecord> predictionsOff =
+                Dictionary<string, TryvohaOffPredictionRecord> predictionsOff =
                     serviceOff.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
                         events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
-                Tuple<double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
+                Tuple<double, double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
                 var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
                 ShowInConsole(payload);
                 SendPayload(payload);
@@ -238,7 +248,7 @@ namespace TryvogaPrediction
             try
             {
                 Console.Write($"sending payload to {Config["payload_url"]}...");
-                var httpWebRequest = (HttpWebRequest) WebRequest.Create(Config["payload_url"]);
+                var httpWebRequest = (HttpWebRequest)WebRequest.Create(Config["payload_url"]);
                 httpWebRequest.ContentType = "application/json";
                 httpWebRequest.Method = "POST";
 
@@ -262,8 +272,8 @@ namespace TryvogaPrediction
         static ResultPayload GetPayload(Dictionary<string, bool> status,
             Dictionary<string, TryvohaPredictionRecord> predictionsOn,
             Tuple<double, double, double> modelEvalsOn,
-            Dictionary<string, OffTryvohaPredictionRecord> predictionsOff,
-            Tuple<double, double> modelEvalsOff)
+            Dictionary<string, TryvohaOffPredictionRecord> predictionsOff,
+            Tuple<double, double, double> modelEvalsOff)
         {
             ResultPayload result = new ResultPayload
             {
@@ -290,7 +300,7 @@ namespace TryvogaPrediction
             }
             if (modelEvalsOff != null)
             {
-                result.ModelEvaluations.Add($"model 'OFF' - loss: {modelEvalsOff.Item2:0.0}, rsqr: {modelEvalsOff.Item1:0.00}");
+                result.ModelEvaluations.Add($"model 'OFF' - loss: {modelEvalsOff.Item2:0.0}, rsqr: {modelEvalsOff.Item1:0.00}, mae: {modelEvalsOff.Item3:0.0}");
             }
 
             return result;
