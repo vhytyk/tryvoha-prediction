@@ -136,9 +136,10 @@ namespace TryvogaPrediction
            Channel tryvogaPredictionTest,
            Dictionary<int, TryvohaEvent> newEvents)
         {
+            string[] notificationRegions = { "Закарпатська", "Львівська", "Івано-Франківська" };
             Dictionary<string, TryvohaPredictionRecord> result = new Dictionary<string, TryvohaPredictionRecord>();
             var lastEventTime = events.Values.OrderBy(e => e.Id).LastOrDefault()?.EventTime ?? DateTime.UtcNow;
-            string[] notificationRegions =  { "Закарпатська", "Львівська", "Івано-Франківська" };
+            
             var groupedForPrediction = events.Values.Where(e => e.EventTime >= lastEventTime.AddHours(-3)).GroupBy(e => e.Region).Select(e => new
             {
                 Region = e.Key,
@@ -163,11 +164,6 @@ namespace TryvogaPrediction
                     if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
-                            $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
-                    }
-                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
-                    {
-                        client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
                 }

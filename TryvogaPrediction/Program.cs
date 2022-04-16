@@ -19,6 +19,7 @@ namespace TryvogaPrediction
         public static string DataPath;
         public static string DataFileName;
         public static bool SendNotifications;
+        public static string PayloadUrl;
 
         public static Dictionary<string, string> RegionsPlates = new Dictionary<string, string>
         {
@@ -178,6 +179,7 @@ namespace TryvogaPrediction
             SendNotifications = bool.Parse(Config["sendNotifications"] ?? "false");
             DataPath = Config["dataPath"] ?? "/tmp/tryvoha";
             DataFileName = $"{DataPath}/tryvoha.csv";
+            PayloadUrl = Config["payload_url"];
 
             //WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
@@ -200,7 +202,7 @@ namespace TryvogaPrediction
             if (events.Count > 0)
             {
                 serviceOn.GeneratePredictionEngines(events, true);
-                serviceOff.GeneratePredictionEngines(events,true);
+                serviceOff.GeneratePredictionEngines(events, true);
             }
 
             var avg = serviceOff.GetModelEvaluationsAvg();
@@ -235,6 +237,7 @@ namespace TryvogaPrediction
                 Dictionary<string, TryvohaOffPredictionRecord> predictionsOff = serviceOff.ProcessPrediction(events);
                 Tuple<double, double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
                 var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
+                SendNotificationsToTelegram(payload, tryvogaPredictionTest, client);
                 ShowInConsole(payload);
                 SendPayload(payload);
                 Thread.Sleep(10000);
@@ -245,7 +248,12 @@ namespace TryvogaPrediction
         {
             try
             {
-                Console.Write($"sending payload to {Config["payload_url"]}...");
+                if (string.IsNullOrEmpty(PayloadUrl))
+                {
+                    return;
+                }
+
+                Console.Write($"sending payload to {PayloadUrl}...");
                 var httpWebRequest = (HttpWebRequest)WebRequest.Create(Config["payload_url"]);
                 httpWebRequest.ContentType = "application/json";
                 httpWebRequest.Method = "POST";
@@ -267,6 +275,77 @@ namespace TryvogaPrediction
             Console.WriteLine("done");
         }
 
+        static Dictionary<string, RegionStatus> OldStatuses = new Dictionary<string, RegionStatus>();
+        static DateTime LastShowOff = DateTime.MinValue;
+        static void SendNotificationsToTelegram(ResultPayload payload, Channel tgChannel, WTelegram.Client client)
+        {
+            string[] notificationRegions = { "Закарпатська", "Львівська", "Івано-Франківська" };
+            if (!SendNotifications)
+            {
+                return;
+            }
+
+            bool needToShow = false;
+            Dictionary<string, RegionStatus> newStatuses = payload.Regions.Where(g => notificationRegions.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+            foreach (var region in newStatuses)
+            {
+                var newStatus = region.Value;
+                var oldStatus = OldStatuses.ContainsKey(region.Key) ? OldStatuses[region.Key] : null;
+                double showOffMinutes = (DateTime.UtcNow - LastShowOff).TotalMinutes;
+                if (oldStatus == null && !newStatus.Tryvoha && newStatus.PredictedOn.HasValue && newStatus.PredictedOn.Value)
+                {
+                    needToShow = true;
+                }
+                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.Tryvoha)
+                {
+                    needToShow = true;
+                }
+                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.PredictedOn != newStatus.PredictedOn)
+                {
+                    needToShow = true;
+                }
+                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.PredictedOn == newStatus.PredictedOn && oldStatus.ProbabilityOn != newStatus.ProbabilityOn)
+                {
+                    needToShow = true;
+                }
+                if (oldStatus == null && newStatus.Tryvoha && showOffMinutes > 5)
+                {
+                    needToShow = true;
+                    LastShowOff = DateTime.UtcNow;
+                }
+                if (oldStatus != null && newStatus.Tryvoha && newStatus.PredictedOffMinutes != oldStatus.PredictedOffMinutes && showOffMinutes > 5)
+                {
+                    needToShow = true;
+                    LastShowOff = DateTime.UtcNow;
+                }
+                if (oldStatus != null && newStatus.Tryvoha && !oldStatus.Tryvoha)
+                {
+                    needToShow = true;
+                    LastShowOff = DateTime.UtcNow;
+                }
+            }
+            if (needToShow)
+            {
+                StringBuilder message = new StringBuilder();
+                foreach (var status in newStatuses)
+                {
+                    string statusText = status.Value.PredictedOn.HasValue
+                            ? (status.Value.PredictedOn.Value ? "можлива тривога:" : "немає, ймовірність:")
+                            : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Tryvoha ? "тривога." : "немає тривоги."));
+                    string statusValue = status.Value.PredictedOn.HasValue
+                            ? $"{status.Value.ProbabilityOn * 100:0}%"
+                            : (status.Value.PredictedOffMinutes.HasValue ? $"~{status.Value.PredictedOffMinutes:0}хв лишилось" : "");
+                    string statusSmile = status.Value.PredictedOn.HasValue
+                            ? (status.Value.PredictedOn.Value ? "\U0001F7E1" : "\U0001F7E2")
+                            : (status.Value.PredictedOffMinutes.HasValue ? "\U0001F534" : (status.Value.Tryvoha ? "\U0001F534" : "\U0001F7E2"));
+                    message.AppendLine($"{statusSmile} {status.Key} - {statusText} {statusValue}");
+                }
+                client.SendMessageAsync(new InputChannel(tgChannel.id, tgChannel.access_hash), message.ToString());
+                Console.WriteLine(message);
+            }
+            OldStatuses = new Dictionary<string, RegionStatus>(newStatuses);
+        }
+
         static ResultPayload GetPayload(Dictionary<string, bool> status,
             Dictionary<string, TryvohaPredictionRecord> predictionsOn,
             Tuple<double, double, double> modelEvalsOn,
@@ -285,7 +364,7 @@ namespace TryvogaPrediction
                 var predictionOff = (predictionsOff.ContainsKey(region) && isOn) ? predictionsOff[region] : null;
                 result.Regions[region] = new RegionStatus
                 {
-                    Status = isOn,
+                    Tryvoha = isOn,
                     PredictedOn = predictionOn?.Prediction,
                     ProbabilityOn = predictionOn?.Probability,
                     PredictedOffMinutes = predictionOff?.Score,
@@ -311,7 +390,7 @@ namespace TryvogaPrediction
             foreach (var region in payload.Regions.Keys.OrderBy(s => s))
             {
 
-                bool isOn = payload.Regions[region].Status;
+                bool isOn = payload.Regions[region].Tryvoha;
                 Console.ForegroundColor = isOn ? ConsoleColor.Red : ConsoleColor.Green;
                 Console.Write($"{region}: {(isOn ? "тривога" : "немає")}");
 
