@@ -237,9 +237,9 @@ namespace TryvogaPrediction
                 Dictionary<string, TryvohaOffPredictionRecord> predictionsOff = serviceOff.ProcessPrediction(events);
                 Tuple<double, double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
                 var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
+                SendPayload(payload);
                 SendNotificationsToTelegram(payload, tryvogaPredictionTest, client);
                 ShowInConsole(payload);
-                SendPayload(payload);
                 Thread.Sleep(10000);
             }
         }
