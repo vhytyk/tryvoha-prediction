@@ -130,13 +130,8 @@ namespace TryvogaPrediction
             return null;
         }
 
-        public Dictionary<string, TryvohaPredictionRecord> ProcessPrediction(WTelegram.Client client,
-           Dictionary<int, TryvohaEvent> events,
-           Channel tryvogaPrediction,
-           Channel tryvogaPredictionTest,
-           Dictionary<int, TryvohaEvent> newEvents)
+        public Dictionary<string, TryvohaPredictionRecord> ProcessPrediction(Dictionary<int, TryvohaEvent> events)
         {
-            string[] notificationRegions = { "Закарпатська", "Львівська", "Івано-Франківська" };
             Dictionary<string, TryvohaPredictionRecord> result = new Dictionary<string, TryvohaPredictionRecord>();
             var lastEventTime = events.Values.OrderBy(e => e.Id).LastOrDefault()?.EventTime ?? DateTime.UtcNow;
             
@@ -160,12 +155,6 @@ namespace TryvogaPrediction
                 {
                     var predictionResult = _predictionEngines[region].Predict(sampleStatement);
                     result[region] = predictionResult;
-
-                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
-                    {
-                        client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
-                            $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
-                    }
                 }
 
             }

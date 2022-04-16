@@ -174,6 +174,8 @@ namespace TryvogaPrediction
             SaveToFile(events);
         }
 
+       
+
         public static void Main(string[] args)
         {
             SendNotifications = bool.Parse(Config["sendNotifications"] ?? "false");
@@ -190,6 +192,29 @@ namespace TryvogaPrediction
             Channel tryvogaChannel = (Channel)allChats.chats[1766138888];
             Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
             Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
+
+            #region show test
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //}
+            //}, tryvogaPredictionTest, client);
+            //Thread.Sleep(3000);
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=5} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //}
+            //}, tryvogaPredictionTest, client);
+            //return;
+            #endregion
 
             if (!Directory.Exists(DataPath))
             {
@@ -226,19 +251,19 @@ namespace TryvogaPrediction
                 Dictionary<int, TryvohaEvent> oldEvents = new Dictionary<int, TryvohaEvent>(events);
                 FillInEvents(client, tryvogaChannel, events);
 
-                Dictionary<string, bool> status = events.GroupBy(e => e.Value.Region)
-                    .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Value.EventTime).Last().Value.Tryvoha);
+                Dictionary<string, TryvohaEvent> status = events.GroupBy(e => e.Value.Region)
+                    .ToDictionary(g => g.Key, g =>  g.OrderBy(e => e.Value.EventTime).Last().Value);
 
-                Dictionary<string, TryvohaPredictionRecord> predictionsOn =
-                    serviceOn.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
-                        events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
+                Dictionary<string, TryvohaPredictionRecord> predictionsOn = serviceOn.ProcessPrediction(events);
                 Tuple<double, double, double> modelEvalsOn = serviceOn.GetModelEvaluationsAvg();
 
                 Dictionary<string, TryvohaOffPredictionRecord> predictionsOff = serviceOff.ProcessPrediction(events);
                 Tuple<double, double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
+
                 var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
+
                 SendPayload(payload);
-                SendNotificationsToTelegram(payload, tryvogaPredictionTest, client);
+                SendNotificationsToTelegram(payload, tryvogaPredictionChannel, client);
                 ShowInConsole(payload);
                 Thread.Sleep(10000);
             }
@@ -332,17 +357,18 @@ namespace TryvogaPrediction
             if (needToShow)
             {
                 StringBuilder message = new StringBuilder();
+                message.AppendLine("\U0001F4E2Статус:");
                 foreach (var status in newStatuses)
                 {
                     string statusText = status.Value.PredictedOn.HasValue
-                            ? (status.Value.PredictedOn.Value ? "можлива тривога:" : "немає, ймовірність:")
-                            : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Status ? "тривога." : "немає тривоги."));
+                            ? (status.Value.PredictedOn.Value ? "можливо:" : (status.Value.Minutes < 15 ? "відбій." : "немає:"))
+                            : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Status ? "тривога." : "немає."));
                     string statusValue = status.Value.PredictedOn.HasValue
-                            ? $"{status.Value.ProbabilityOn * 100:0}%"
-                            : (status.Value.PredictedOffMinutes.HasValue ? $"~{status.Value.PredictedOffMinutes:0}хв лишилось" : "");
+                            ? (status.Value.Minutes > 15 ? $"{status.Value.ProbabilityOn * 100:0}%" : string.Empty)
+                            : (status.Value.PredictedOffMinutes.HasValue ? $"~{Math.Abs(status.Value.PredictedOffMinutes.Value):0}хв" : "");
                     string statusSmile = status.Value.PredictedOn.HasValue
-                            ? (status.Value.PredictedOn.Value ? "\U0001F7E1" : "\U0001F7E2")
-                            : (status.Value.PredictedOffMinutes.HasValue ? "\U0001F534" : (status.Value.Status ? "\U0001F534" : "\U0001F7E2"));
+                            ? (status.Value.PredictedOn.Value ? "\U0001F62C" : "\U0001F340")
+                            : (status.Value.PredictedOffMinutes.HasValue ? "\U0001F6A8" : (status.Value.Status ? "\U0001F6A8" : "\U0001F340"));
                     message.AppendLine($"{statusSmile} {status.Key} - {statusText} {statusValue}");
                 }
                 client.SendMessageAsync(new InputChannel(tgChannel.id, tgChannel.access_hash), message.ToString());
@@ -351,7 +377,7 @@ namespace TryvogaPrediction
             OldStatuses = new Dictionary<string, RegionStatus>(newStatuses);
         }
 
-        static ResultPayload GetPayload(Dictionary<string, bool> status,
+        static ResultPayload GetPayload(Dictionary<string, TryvohaEvent> status,
             Dictionary<string, TryvohaPredictionRecord> predictionsOn,
             Tuple<double, double, double> modelEvalsOn,
             Dictionary<string, TryvohaOffPredictionRecord> predictionsOff,
@@ -364,11 +390,12 @@ namespace TryvogaPrediction
             };
             foreach (var region in status.Keys)
             {
-                bool isOn = status[region];
+                bool isOn = status[region].Tryvoha;
                 var predictionOn = (predictionsOn.ContainsKey(region) && !isOn) ? predictionsOn[region] : null;
                 var predictionOff = (predictionsOff.ContainsKey(region) && isOn) ? predictionsOff[region] : null;
                 result.Regions[region] = new RegionStatus
                 {
+                    Minutes = (int)(DateTime.UtcNow - status[region].EventTime).TotalMinutes,
                     Status = isOn,
                     PredictedOn = predictionOn?.Prediction,
                     ProbabilityOn = predictionOn?.Probability,
