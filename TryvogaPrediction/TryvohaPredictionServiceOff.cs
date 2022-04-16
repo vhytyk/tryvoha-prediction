@@ -87,8 +87,7 @@ namespace TryvogaPrediction
         }
         ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
-            var estimator = mlContext.Transforms.Concatenate("RegionsMinutes", "RegionsMinutes")
-                .Append(mlContext.Transforms.NormalizeMinMax("Features", "RegionsMinutes"))
+            var estimator = mlContext.Transforms.NormalizeMinMax("Features", "RegionsMinutes")
                 .Append(mlContext.Transforms.NormalizeMeanVariance("Features", "RegionsMinutes"))
                 //.Append(mlContext.Transforms.Concatenate("Features", "RegionsMinutes"))
                 .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"));
