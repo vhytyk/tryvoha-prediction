@@ -199,8 +199,8 @@ namespace TryvogaPrediction
             TryvohaPredictionServiceOn serviceOn = new TryvohaPredictionServiceOn();
             if (events.Count > 0)
             {
-                serviceOn.GeneratePredictionEngines(events);
-                serviceOff.GeneratePredictionEngines(events, true);
+                serviceOn.GeneratePredictionEngines(events, true);
+                serviceOff.GeneratePredictionEngines(events,true);
             }
 
             var avg = serviceOff.GetModelEvaluationsAvg();
@@ -232,9 +232,7 @@ namespace TryvogaPrediction
                         events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
                 Tuple<double, double, double> modelEvalsOn = serviceOn.GetModelEvaluationsAvg();
 
-                Dictionary<string, TryvohaOffPredictionRecord> predictionsOff =
-                    serviceOff.ProcessPrediction(client, events, tryvogaPredictionChannel, tryvogaPredictionTest,
-                        events.Except(oldEvents).ToDictionary(e => e.Key, e => e.Value));
+                Dictionary<string, TryvohaOffPredictionRecord> predictionsOff = serviceOff.ProcessPrediction(events);
                 Tuple<double, double, double> modelEvalsOff = serviceOff.GetModelEvaluationsAvg();
                 var payload = GetPayload(status, predictionsOn, modelEvalsOn, predictionsOff, modelEvalsOff);
                 ShowInConsole(payload);

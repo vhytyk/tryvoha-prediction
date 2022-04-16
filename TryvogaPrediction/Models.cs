@@ -47,10 +47,10 @@ namespace TryvogaPrediction
         //[LoadColumn(2), ColumnName("Label")]
         //public Single DiffMins { get; set; }
 
-        [LoadColumn(1, 24)]
-        [VectorType(24)]
+        [LoadColumn(1, 30)]
+        [VectorType(30)]
         public Single[] RegionsMinutes { get; set; }
-        [LoadColumn(25), ColumnName("Label")]
+        [LoadColumn(31), ColumnName("Label")]
         public Single DiffMins { get; set; }
     }
 
