@@ -287,7 +287,7 @@ namespace TryvogaPrediction
 
             bool needToShow = false;
             Dictionary<string, RegionStatus> newStatuses = payload.Regions.Where(g => notificationRegions.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
-            if(OldStatuses == null && !newStatuses.Any(s => s.Value.Tryvoha || (s.Value.PredictedOn.HasValue && s.Value.PredictedOn.Value)))
+            if(OldStatuses == null && !newStatuses.Any(s => s.Value.Status || (s.Value.PredictedOn.HasValue && s.Value.PredictedOn.Value)))
             {
                 OldStatuses = new Dictionary<string, RegionStatus>(newStatuses);
                 return;
@@ -297,33 +297,33 @@ namespace TryvogaPrediction
                 var newStatus = region.Value;
                 var oldStatus = OldStatuses.ContainsKey(region.Key) ? OldStatuses[region.Key] : null;
                 double showOffMinutes = (DateTime.UtcNow - LastShowOff).TotalMinutes;
-                if (oldStatus == null && !newStatus.Tryvoha && newStatus.PredictedOn.HasValue && newStatus.PredictedOn.Value)
+                if (oldStatus == null && !newStatus.Status && newStatus.PredictedOn.HasValue && newStatus.PredictedOn.Value)
                 {
                     needToShow = true;
                 }
-                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.Tryvoha)
+                if (oldStatus != null && !newStatus.Status && oldStatus.Status)
                 {
                     needToShow = true;
                 }
-                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.PredictedOn != newStatus.PredictedOn)
+                if (oldStatus != null && !newStatus.Status && oldStatus.PredictedOn != newStatus.PredictedOn)
                 {
                     needToShow = true;
                 }
-                if (oldStatus != null && !newStatus.Tryvoha && oldStatus.PredictedOn == newStatus.PredictedOn && oldStatus.ProbabilityOn != newStatus.ProbabilityOn)
+                if (oldStatus != null && !newStatus.Status && oldStatus.PredictedOn == newStatus.PredictedOn && oldStatus.ProbabilityOn != newStatus.ProbabilityOn)
                 {
                     needToShow = true;
                 }
-                if (oldStatus == null && newStatus.Tryvoha && showOffMinutes > 5)
-                {
-                    needToShow = true;
-                    LastShowOff = DateTime.UtcNow;
-                }
-                if (oldStatus != null && newStatus.Tryvoha && newStatus.PredictedOffMinutes != oldStatus.PredictedOffMinutes && showOffMinutes > 5)
+                if (oldStatus == null && newStatus.Status && showOffMinutes > 5)
                 {
                     needToShow = true;
                     LastShowOff = DateTime.UtcNow;
                 }
-                if (oldStatus != null && newStatus.Tryvoha && !oldStatus.Tryvoha)
+                if (oldStatus != null && newStatus.Status && newStatus.PredictedOffMinutes != oldStatus.PredictedOffMinutes && showOffMinutes > 5)
+                {
+                    needToShow = true;
+                    LastShowOff = DateTime.UtcNow;
+                }
+                if (oldStatus != null && newStatus.Status && !oldStatus.Status)
                 {
                     needToShow = true;
                     LastShowOff = DateTime.UtcNow;
@@ -336,13 +336,13 @@ namespace TryvogaPrediction
                 {
                     string statusText = status.Value.PredictedOn.HasValue
                             ? (status.Value.PredictedOn.Value ? "можлива тривога:" : "немає, ймовірність:")
-                            : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Tryvoha ? "тривога." : "немає тривоги."));
+                            : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Status ? "тривога." : "немає тривоги."));
                     string statusValue = status.Value.PredictedOn.HasValue
                             ? $"{status.Value.ProbabilityOn * 100:0}%"
                             : (status.Value.PredictedOffMinutes.HasValue ? $"~{status.Value.PredictedOffMinutes:0}хв лишилось" : "");
                     string statusSmile = status.Value.PredictedOn.HasValue
                             ? (status.Value.PredictedOn.Value ? "\U0001F7E1" : "\U0001F7E2")
-                            : (status.Value.PredictedOffMinutes.HasValue ? "\U0001F534" : (status.Value.Tryvoha ? "\U0001F534" : "\U0001F7E2"));
+                            : (status.Value.PredictedOffMinutes.HasValue ? "\U0001F534" : (status.Value.Status ? "\U0001F534" : "\U0001F7E2"));
                     message.AppendLine($"{statusSmile} {status.Key} - {statusText} {statusValue}");
                 }
                 client.SendMessageAsync(new InputChannel(tgChannel.id, tgChannel.access_hash), message.ToString());
@@ -369,7 +369,7 @@ namespace TryvogaPrediction
                 var predictionOff = (predictionsOff.ContainsKey(region) && isOn) ? predictionsOff[region] : null;
                 result.Regions[region] = new RegionStatus
                 {
-                    Tryvoha = isOn,
+                    Status = isOn,
                     PredictedOn = predictionOn?.Prediction,
                     ProbabilityOn = predictionOn?.Probability,
                     PredictedOffMinutes = predictionOff?.Score,
@@ -395,7 +395,7 @@ namespace TryvogaPrediction
             foreach (var region in payload.Regions.Keys.OrderBy(s => s))
             {
 
-                bool isOn = payload.Regions[region].Tryvoha;
+                bool isOn = payload.Regions[region].Status;
                 Console.ForegroundColor = isOn ? ConsoleColor.Red : ConsoleColor.Green;
                 Console.Write($"{region}: {(isOn ? "тривога" : "немає")}");
 

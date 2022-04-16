@@ -61,7 +61,7 @@ namespace TryvogaPrediction
 
     public class RegionStatus
     {
-        public bool Tryvoha { get; set; }
+        public bool Status { get; set; }
         public bool? PredictedOn { get; set; }
         public double? PredictedOffMinutes { get; set; }
         public double? ProbabilityOn { get; set; }
