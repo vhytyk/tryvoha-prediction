@@ -16,9 +16,7 @@ namespace TryvogaPrediction
 {
     public class Program
     {
-        public static string DataPath;
-        public static string DataFileName;
-        public static bool SendNotifications;
+     
 
         public static Dictionary<string, string> RegionsPlates = new Dictionary<string, string>
         {
@@ -49,126 +47,22 @@ namespace TryvogaPrediction
 
         };
 
-        public static IConfiguration Config = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", optional: true)
-                .Build();
-
         static string ConfigForTelegramClient(string what)
         {
             switch (what)
             {
-                case "api_id": return Config["api_id"];
-                case "api_hash": return Config["api_hash"];
-                case "phone_number": return Config["phone_number"];
+                case "api_id": return Config.TgApiId;
+                case "api_hash": return Config.TgApiHash;
+                case "phone_number": return Config.TgPhoneNumber;
                 case "verification_code": Console.Write("Code: "); return Console.ReadLine();
-                case "password": return Config["password"];     // if user has enabled 2FA
-                default: return null;                  // let WTelegramClient decide the default config
+                case "password": return Config.TgPassword;
+                default: return null;
             }
         }
         static bool _init = true;
-        static void GetEvents(WTelegram.Client client, Channel tryvoga, Dictionary<int, TryvohaEvent> events)
-        {
-            try
-            {
-                DateTime minDateTime = _init && events.Count > 0 ? events.Values.Min(v => v.EventTime) : DateTime.UtcNow;
-
-                var msg = client.Messages_GetHistory(new InputChannel(tryvoga.id, tryvoga.access_hash), offset_date: minDateTime).Result;
-                foreach (var m in msg.Messages)
-                {
-                    Message message = m as Message;
-                    if (m == null)
-                    {
-                        continue;
-                    }
-                    var tryvoha = GetTryvohaFromMessage(message);
-                    if (tryvoha != null
-                        && !events.ContainsKey(message.id))
-                    {
-                        events.Add(message.id, tryvoha);
-                    }
-                }
-            }
-            catch { }
-
-        }
-
-        static TryvohaEvent GetTryvohaFromMessage(Message message)
-        {
-            Match regionOn = Regex.Match(message.message, @"Повітряна тривога в\s+(.*)\s+област.*\n");
-            Match regionOff = Regex.Match(message.message, @"Відбій тривоги в\s+(.*)\s+област.*\n");
-            if (regionOn.Success || regionOff.Success)
-            {
-                return new TryvohaEvent
-                {
-                    Id = message.id,
-                    EventTime = message.date,
-                    Region = (regionOn.Success
-                    ? regionOn.Groups[1].Value
-                    : regionOff.Groups[1].Value).Replace(';', '.').Trim('.'),
-                    OnOff = regionOn.Success
-                };
-            }
-            return null;
-        }
-        static void SaveToFile(Dictionary<int, TryvohaEvent> events)
-        {
-
-            File.WriteAllText(DataFileName, $"Id;EventTime;Region;OnOff{Environment.NewLine}");
-            foreach (var tryvoha in events.Values.OrderBy(e => e.Id))
-            {
-                File.AppendAllText(DataFileName, $"{tryvoha.Id};{tryvoha.EventTime.ToString("yyyy-MM-dd HH:mm:ss")};{tryvoha.Region};{tryvoha.OnOff}{Environment.NewLine}");
-            }
-        }
-
-        public static Dictionary<int, TryvohaEvent> LoadFromFile()
-        {
-            Dictionary<int, TryvohaEvent> result = new Dictionary<int, TryvohaEvent>();
-            if (!File.Exists(DataFileName))
-            {
-                return result;
-            }
-            using (TextFieldParser parser = new TextFieldParser(DataFileName))
-            {
-                parser.TextFieldType = FieldType.Delimited;
-                parser.SetDelimiters(";");
-                while (!parser.EndOfData)
-                {
-                    //Process row
-                    string[] fields = parser.ReadFields();
-                    if (fields[0] == "Id")
-                    {
-                        continue;
-                    }
-                    TryvohaEvent e = new TryvohaEvent();
-                    e.Id = int.Parse(fields[0]);
-                    e.EventTime = DateTime.Parse(fields[1]);
-                    e.Region = fields[2];
-                    e.OnOff = bool.Parse(fields[3]);
-                    result.Add(e.Id, e);
-                }
-            }
-            return result;
-        }
-
-        static void FillInEvents(WTelegram.Client client, Channel tryvoga, Dictionary<int, TryvohaEvent> events, IEnumerable<int> loadedKeys = null)
-        {
-            Console.WriteLine($"{Environment.NewLine}{DateTime.Now}: getting new events...");
-            int msgCount = -1;
-            while (msgCount < events.Count && (loadedKeys == null || !events.Keys.Intersect(loadedKeys).Any()))
-            {
-                Thread.Sleep(1000);
-                msgCount = events.Count;
-                GetEvents(client, tryvoga, events);
-                Console.WriteLine($"events added {events.Count - msgCount}, total count: {events.Count}");
-            }
-            SaveToFile(events);
-        }
-
         public static void Main(string[] args)
         {
-            SendNotifications = bool.Parse(Config["sendNotifications"] ?? "false");
-            DataPath = Config["dataPath"] ?? "/tmp/tryvoha";
-            DataFileName = $"{DataPath}/tryvoha.csv";
+            Config.ReadConfig("appsettings.json");
 
             //WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
@@ -180,9 +74,9 @@ namespace TryvogaPrediction
             Channel tryvogaPredictionChannel = (Channel)allChats.chats[1766772788];
             Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
 
-            if (!Directory.Exists(DataPath))
+            if (!Directory.Exists(Config.DataPath))
             {
-                Directory.CreateDirectory(DataPath);
+                Directory.CreateDirectory(Config.DataPath);
             }
 
             Dictionary<int, TryvohaEvent> events = LoadFromFile();
@@ -232,13 +126,25 @@ namespace TryvogaPrediction
                 Thread.Sleep(10000);
             }
         }
+       
+
+      
+       
+
+       
+
+     
 
         static void SendPayload(ResultPayload payload)
         {
             try
             {
-                Console.Write($"sending payload to {Config["payload_url"]}...");
-                var httpWebRequest = (HttpWebRequest) WebRequest.Create(Config["payload_url"]);
+                if (string.IsNullOrEmpty(Config.PayloadUrl))
+                {
+                    return;
+                }
+                Console.Write($"sending payload to {Config.PayloadUrl}...");
+                var httpWebRequest = (HttpWebRequest) WebRequest.Create(Config.PayloadUrl);
                 httpWebRequest.ContentType = "application/json";
                 httpWebRequest.Method = "POST";
 

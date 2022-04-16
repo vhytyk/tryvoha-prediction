@@ -34,7 +34,7 @@ namespace TryvogaPrediction
             Dictionary<int, TryvohaEvent> events = Program.LoadFromFile()
                 .Where(e => e.Value.EventTime > DateTime.UtcNow.AddMonths(-1))
                 .ToDictionary(e => e.Key, e => e.Value);
-            File.WriteAllText($"{Program.DataPath}/{region}Off.csv", $"Id;RegionsOn;DiffMins{Environment.NewLine}");
+            File.WriteAllText($"{Config.DataPath}/{region}Off.csv", $"Id;RegionsOn;DiffMins{Environment.NewLine}");
 
             foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.Region == region && e.OnOff))
             {
@@ -60,7 +60,7 @@ namespace TryvogaPrediction
                         RegionsOn = string.Join(" ", groupedOn.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(current, g.EventTime)}")),
                         DiffMins = timeDiffRegion
                     };
-                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{ev.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
+                    File.AppendAllText($"{Config.DataPath}/{region}Off.csv", $"{ev.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
                     current = current.AddMinutes(minStep);
                 }
                
@@ -90,10 +90,10 @@ namespace TryvogaPrediction
         {
             Console.Write($"Creating prediction engine (Off) for {region}...");
             MLContext mlContext = new MLContext();
-            IDataView dataView = mlContext.Data.LoadFromTextFile<OffTryvohaTrainingRecord>($"{Program.DataPath}/{region}Off.csv", hasHeader: true, separatorChar: ';');
+            IDataView dataView = mlContext.Data.LoadFromTextFile<OffTryvohaTrainingRecord>($"{Config.DataPath}/{region}Off.csv", hasHeader: true, separatorChar: ';');
             DataOperationsCatalog.TrainTestData splitDataView = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
-            string engineFileName = $"{Program.DataPath}/{region}Off.zip";
+            string engineFileName = $"{Config.DataPath}/{region}Off.zip";
             var model = File.Exists(engineFileName) && !regenerate
                 ? mlContext.Model.Load(engineFileName, out _)
                 : BuildAndTrainModel(mlContext, splitDataView.TrainSet);
@@ -117,7 +117,7 @@ namespace TryvogaPrediction
 
             foreach (string region in regions)
             {
-                if (regenerate || !File.Exists($"{Program.DataPath}/{region}Off.csv"))
+                if (regenerate || !File.Exists($"{Config.DataPath}/{region}Off.csv"))
                 {
                     GenerateData(region);
                 }
@@ -166,7 +166,7 @@ namespace TryvogaPrediction
             }
             
             double modelsAgeMins = _predictionEngines.Any()
-                ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Program.DataPath}/{_predictionEngines.Keys.First()}Off.zip")).TotalMinutes
+                ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Config.DataPath}/{_predictionEngines.Keys.First()}Off.zip")).TotalMinutes
                 : double.MaxValue;
             if (modelsAgeMins > 60)
             {

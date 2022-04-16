@@ -35,7 +35,7 @@ namespace TryvogaPrediction
             Dictionary<int, TryvohaEvent> events = Program.LoadFromFile()
                 .Where(e => e.Value.EventTime > DateTime.UtcNow.AddMonths(-1))
                 .ToDictionary(e => e.Key, e => e.Value);
-            File.WriteAllText($"{Program.DataPath}/{region}On.csv", $"RegionsOn;Min10{Environment.NewLine}");
+            File.WriteAllText($"{Config.DataPath}/{region}On.csv", $"RegionsOn;Min10{Environment.NewLine}");
 
             foreach (var ev in events.Values.OrderBy(e => e.Id).Where(e => e.OnOff && e.Region != region))
             {
@@ -55,7 +55,7 @@ namespace TryvogaPrediction
                     RegionsOn = string.Join(" ", grouped.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(ev.EventTime, g.EventTime)}")),
                     Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.OnOff)
                 };
-                File.AppendAllText($"{Program.DataPath}/{region}On.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
+                File.AppendAllText($"{Config.DataPath}/{region}On.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
             Console.WriteLine("done");
         }
@@ -83,10 +83,10 @@ namespace TryvogaPrediction
         {
             Console.Write($"Creating prediction engine (on) for {region}...");
             MLContext mlContext = new MLContext();
-            IDataView dataView = mlContext.Data.LoadFromTextFile<TryvohaTrainingRecord>($"{Program.DataPath}/{region}On.csv", hasHeader: true, separatorChar: ';');
+            IDataView dataView = mlContext.Data.LoadFromTextFile<TryvohaTrainingRecord>($"{Config.DataPath}/{region}On.csv", hasHeader: true, separatorChar: ';');
             DataOperationsCatalog.TrainTestData splitDataView = mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
-            string engineFileName = $"{Program.DataPath}/{region}On.zip";
+            string engineFileName = $"{Config.DataPath}/{region}On.zip";
             var model = File.Exists(engineFileName) && !regenerate
                 ? mlContext.Model.Load(engineFileName, out _)
                 : BuildAndTrainModel(mlContext, splitDataView.TrainSet);
@@ -112,7 +112,7 @@ namespace TryvogaPrediction
 
             foreach (string region in regions)
             {
-                if (regenerate || !File.Exists($"{Program.DataPath}/{region}On.csv"))
+                if (regenerate || !File.Exists($"{Config.DataPath}/{region}On.csv"))
                 {
                     GenerateData(region);
                 }
@@ -160,12 +160,12 @@ namespace TryvogaPrediction
                     var predictionResult = _predictionEngines[region].Predict(sampleStatement);
                     result[region] = predictionResult;
 
-                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
+                    if (Config.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction && notificationRegions.Contains(region))
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPrediction.id, tryvogaPrediction.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
                     }
-                    if (Program.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
+                    if (Config.SendNotifications && newEvents.Any() && previous.EventTime < DateTime.UtcNow.AddHours(-1) && predictionResult.Prediction)
                     {
                         client.SendMessageAsync(new InputChannel(tryvogaPredictionTest.id, tryvogaPredictionTest.access_hash),
                             $"{region} область - ймовірність {predictionResult.Probability * 100:0.0}%");
@@ -175,7 +175,7 @@ namespace TryvogaPrediction
             }
 
             double modelsAgeMins = _predictionEngines.Any()
-                ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Program.DataPath}/{_predictionEngines.Keys.First()}On.zip")).TotalMinutes
+                ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Config.DataPath}/{_predictionEngines.Keys.First()}On.zip")).TotalMinutes
                 : double.MaxValue;
             if (modelsAgeMins > 60)
             {
