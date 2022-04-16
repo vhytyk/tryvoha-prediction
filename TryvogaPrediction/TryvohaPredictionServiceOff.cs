@@ -56,26 +56,26 @@ namespace TryvogaPrediction
                 }).OrderBy(g => g.EventTime);
                 while (currentTime <= end)
                 {
-                    var groupedOn = grouped.Where(g => g.Tryvoha);
-                    var groupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30));
-                    var closeGroupedOn = grouped.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
-                    var closeGroupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30) && regionGroups.Contains(g.Region));
+                    //var groupedOn = grouped.Where(g => g.Tryvoha);
+                    //var groupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30));
+                    //var closeGroupedOn = grouped.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
+                    //var closeGroupedOffRecently = grouped.Where(g => !g.Tryvoha && g.EventTime > currentTime.AddMinutes(-30) && regionGroups.Contains(g.Region));
                     int timeDiffRegion = GetTimeDiff(end, currentTime);
                     var r = new TryvohaOffTrainingRecord
                     {
-                        //RegionsOn = string.Join(" ", groupedOn.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
-                        RegionsOnCount = groupedOn.Count(),
-                        RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        RegionsRecentlyOffCount = groupedOffRecently.Count(),
-                        RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        CloseRegionsOnCount = closeGroupedOn.Count(),
-                        CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
-                        CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
-                        CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
+                        RegionsOn = string.Join(" ", grouped.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(currentTime, g.EventTime)}")),
+                        //RegionsOnCount = groupedOn.Count(),
+                        //RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
+                        //RegionsRecentlyOffCount = groupedOffRecently.Count(),
+                        //RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
+                        //CloseRegionsOnCount = closeGroupedOn.Count(),
+                        //CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
+                        //CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
+                        //CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(currentTime, g.EventTime)),
                         DiffMins = timeDiffRegion
                     };
-                    //File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
-                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOnCount};{r.RegionsOnMinutes};{r.RegionsRecentlyOffCount};{r.RegionsRecentlyOffMinutes};{r.CloseRegionsOnCount};{r.CloseRegionsOnMinutes};{r.CloseRegionsRecentlyOffCount};{r.CloseRegionsRecentlyOffMinutes};{(r.DiffMins)}{Environment.NewLine}");
+                    File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOn};{(r.DiffMins)}{Environment.NewLine}");
+                    //File.AppendAllText($"{Program.DataPath}/{region}Off.csv", $"{current.Id};{r.RegionsOnCount};{r.RegionsOnMinutes};{r.RegionsRecentlyOffCount};{r.RegionsRecentlyOffMinutes};{r.CloseRegionsOnCount};{r.CloseRegionsOnMinutes};{r.CloseRegionsRecentlyOffCount};{r.CloseRegionsRecentlyOffMinutes};{(r.DiffMins)}{Environment.NewLine}");
                     currentTime = currentTime.AddMinutes(minStep);
                 }
 
@@ -84,17 +84,19 @@ namespace TryvogaPrediction
         }
         ITransformer BuildAndTrainModel(MLContext mlContext, IDataView splitTrainSet)
         {
-            var estimator = mlContext.Transforms.Concatenate(outputColumnName: "Features",
-                                nameof(TryvohaOffTrainingRecord.RegionsOnCount),
-                                nameof(TryvohaOffTrainingRecord.RegionsOnMinutes),
-                                nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffCount),
-                                nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffMinutes),
-                                nameof(TryvohaOffTrainingRecord.CloseRegionsOnCount),
-                                nameof(TryvohaOffTrainingRecord.CloseRegionsOnMinutes),
-                                nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffCount),
-                                nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffMinutes))
-                .Append(mlContext.Transforms.NormalizeMeanVariance("Features",
-                            useCdf: true))
+            var estimator = mlContext.Transforms.Text.FeaturizeText(outputColumnName: "Features", inputColumnName: nameof(TryvohaOffPredictionRecord.RegionsOn))
+             .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"))
+            //var estimator = mlContext.Transforms.Concatenate(outputColumnName: "Features",
+            //                    nameof(TryvohaOffTrainingRecord.RegionsOnCount),
+            //                    nameof(TryvohaOffTrainingRecord.RegionsOnMinutes),
+            //                    nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffCount),
+            //                    nameof(TryvohaOffTrainingRecord.RegionsRecentlyOffMinutes),
+            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsOnCount),
+            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsOnMinutes),
+            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffCount),
+            //                    nameof(TryvohaOffTrainingRecord.CloseRegionsRecentlyOffMinutes))
+            //    .Append(mlContext.Transforms.NormalizeMeanVariance("Features",
+            //                useCdf: true))
                 .Append(mlContext.Regression.Trainers.Sdca(labelColumnName: "Label", featureColumnName: "Features"));
             var model = estimator.Fit(splitTrainSet);
             return model;
@@ -183,21 +185,21 @@ namespace TryvogaPrediction
             var grouped = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key).OrderBy(e => e);
             foreach (var region in grouped)
             {
-                string[] regionGroups = Program.RegionsGroups.First(g => g.Value.Contains(region)).Value;
-                var closeGroupedOn = groupedForPrediction.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
-                var closeGroupedOffRecently = groupedForPrediction.Where(g => !g.Tryvoha && g.EventTime > DateTime.UtcNow.AddMinutes(-30) && regionGroups.Contains(g.Region));
+                //string[] regionGroups = Program.RegionsGroups.First(g => g.Value.Contains(region)).Value;
+                //var closeGroupedOn = groupedForPrediction.Where(g => g.Tryvoha && regionGroups.Contains(g.Region));
+                //var closeGroupedOffRecently = groupedForPrediction.Where(g => !g.Tryvoha && g.EventTime > DateTime.UtcNow.AddMinutes(-30) && regionGroups.Contains(g.Region));
 
                 TryvohaOffTrainingRecord sampleStatement = new TryvohaOffTrainingRecord
                 {
-                    RegionsOnCount = groupedOn.Count(),
-                    RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
-                    RegionsRecentlyOffCount = groupedOffRecently.Count(),
-                    RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
-                    CloseRegionsOnCount = closeGroupedOn.Count(),
-                    CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
-                    CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
-                    CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
-                    //RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
+                    //RegionsOnCount = groupedOn.Count(),
+                    //RegionsOnMinutes = groupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    //RegionsRecentlyOffCount = groupedOffRecently.Count(),
+                    //RegionsRecentlyOffMinutes = groupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    //CloseRegionsOnCount = closeGroupedOn.Count(),
+                    //CloseRegionsOnMinutes = closeGroupedOn.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    //CloseRegionsRecentlyOffCount = closeGroupedOffRecently.Count(),
+                    //CloseRegionsRecentlyOffMinutes = closeGroupedOffRecently.Sum(g => GetTimeDiff(DateTime.UtcNow, g.EventTime)),
+                    RegionsOn = string.Join(" ", groupedForPrediction.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(DateTime.UtcNow, g.EventTime)}"))
                 };
 
                 var last = events.Values.OrderBy(e => e.EventTime).Last(e => e.Region == region);

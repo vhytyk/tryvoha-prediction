@@ -36,26 +36,29 @@ namespace TryvogaPrediction
     {
         [LoadColumn(0)]
         public int Id { get; set; }
-        //[LoadColumn(1)]
-        //public string RegionsOn { get; set; }
         [LoadColumn(1)]
-        public Single RegionsOnCount { get; set; }
-        [LoadColumn(2)]
-        public Single RegionsOnMinutes { get; set; }
-        [LoadColumn(3)]
-        public Single RegionsRecentlyOffCount { get; set; }
-        [LoadColumn(4)]
-        public Single RegionsRecentlyOffMinutes { get; set; }
-        [LoadColumn(5)]
-        public Single CloseRegionsOnCount { get; set; }
-        [LoadColumn(6)]
-        public Single CloseRegionsOnMinutes { get; set; }
-        [LoadColumn(7)]
-        public Single CloseRegionsRecentlyOffCount { get; set; }
-        [LoadColumn(8)]
-        public Single CloseRegionsRecentlyOffMinutes { get; set; }
-        [LoadColumn(5), ColumnName("Label")]
+        public string RegionsOn { get; set; }
+        [LoadColumn(2), ColumnName("Label")]
         public Single DiffMins { get; set; }
+
+        //[LoadColumn(1)]
+        //public Single RegionsOnCount { get; set; }
+        //[LoadColumn(2)]
+        //public Single RegionsOnMinutes { get; set; }
+        //[LoadColumn(3)]
+        //public Single RegionsRecentlyOffCount { get; set; }
+        //[LoadColumn(4)]
+        //public Single RegionsRecentlyOffMinutes { get; set; }
+        //[LoadColumn(5)]
+        //public Single CloseRegionsOnCount { get; set; }
+        //[LoadColumn(6)]
+        //public Single CloseRegionsOnMinutes { get; set; }
+        //[LoadColumn(7)]
+        //public Single CloseRegionsRecentlyOffCount { get; set; }
+        //[LoadColumn(8)]
+        //public Single CloseRegionsRecentlyOffMinutes { get; set; }
+        //[LoadColumn(9), ColumnName("Label")]
+        //public Single DiffMins { get; set; }
     }
 
     public class TryvohaOffPredictionRecord : TryvohaOffTrainingRecord
