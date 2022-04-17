@@ -194,44 +194,44 @@ namespace TryvogaPrediction
             Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
 
             #region show test
-            SendNotificationsToTelegram(new ResultPayload
-            {
-                Regions = new Dictionary<string, RegionStatus>
-            {
-                {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
-                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
-            }
-            }, tryvogaPredictionTest, client);
-            Thread.Sleep(5000);
-            SendNotificationsToTelegram(new ResultPayload
-            {
-                Regions = new Dictionary<string, RegionStatus>
-            {
-                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=5} },
-                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
-            }
-            }, tryvogaPredictionTest, client);
-            Thread.Sleep(5000);
-            SendNotificationsToTelegram(new ResultPayload
-            {
-                Regions = new Dictionary<string, RegionStatus>
-            {
-                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.5, Minutes=5} },
-                {"Львівська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.1, Minutes=2}  },
-                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=10} } },
-            }, tryvogaPredictionTest, client);
-            Thread.Sleep(5000);
-            SendNotificationsToTelegram(new ResultPayload
-            {
-                Regions = new Dictionary<string, RegionStatus>
-            {
-                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.5, Minutes=2} },
-                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=3}  },
-                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=4} } },
-            }, tryvogaPredictionTest, client);
-            return;
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //}
+            //}, tryvogaPredictionTest, client);
+            //Thread.Sleep(5000);
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=5} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //}
+            //}, tryvogaPredictionTest, client);
+            //Thread.Sleep(5000);
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.5, Minutes=5} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.1, Minutes=2}  },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=10} } },
+            //}, tryvogaPredictionTest, client);
+            //Thread.Sleep(5000);
+            //SendNotificationsToTelegram(new ResultPayload
+            //{
+            //    Regions = new Dictionary<string, RegionStatus>
+            //{
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.5, Minutes=2} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=3}  },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=4} } },
+            //}, tryvogaPredictionTest, client);
+            //return;
             #endregion
 
             if (!Directory.Exists(DataPath))
