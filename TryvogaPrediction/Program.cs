@@ -383,7 +383,7 @@ namespace TryvogaPrediction
             {
                 StringBuilder messageBuilder = new StringBuilder();
                 messageBuilder.AppendLine($"*{DateTime.UtcNow.AddHours(3).ToString("HH:mm")} Оновлення:*");
-                foreach (var status in newStatuses)
+                foreach (var status in newStatuses.OrderBy(s => s.Key))
                 {
                     string statusText = status.Value.PredictedOn.HasValue
                             ? (status.Value.PredictedOn.Value && status.Value.Minutes > vidbijMins ? "можливо:" : (status.Value.Minutes <= vidbijMins ? "відбій." : "немає:"))
