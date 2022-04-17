@@ -53,7 +53,7 @@ namespace TryvogaPrediction
                 var r = new TryvohaTrainingRecord
                 {
                     RegionsOn = string.Join(" ", grouped.Select(g => $"{Program.RegionsPlates[g.Region]}{GetTimeDiff(ev.EventTime, g.EventTime)}")),
-                    Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(20) && e.Region == region && e.Tryvoha)
+                    Min10 = events.Values.Any(e => e.EventTime > ev.EventTime && e.EventTime <= ev.EventTime.AddMinutes(15) && e.Region == region && e.Tryvoha)
                 };
                 File.AppendAllText($"{Program.DataPath}/{region}On.csv", $"{ev.Id};{r.RegionsOn};{(r.Min10 ? 1 : 0)}{Environment.NewLine}");
             }
@@ -109,9 +109,14 @@ namespace TryvogaPrediction
             _f1.Clear();
             var regions = events.GroupBy(e => e.Value.Region, e => e.Key).Select(e => e.Key)
                 .Where(e => e != "Херсонська" && e != "Луганська").OrderBy(e => e);
-
+            //string[] onlyRegions = { "Вінницька", "Закарпатська" };
+            string[] onlyRegions = null;
             foreach (string region in regions)
             {
+                if (onlyRegions != null && !onlyRegions.Contains(region))
+                {
+                    continue;
+                }
                 if (regenerate || !File.Exists($"{Program.DataPath}/{region}On.csv"))
                 {
                     GenerateData(region);

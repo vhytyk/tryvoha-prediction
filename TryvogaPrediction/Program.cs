@@ -183,6 +183,20 @@ namespace TryvogaPrediction
             DataFileName = $"{DataPath}/tryvoha.csv";
             PayloadUrl = Config["payload_url"];
 
+            Dictionary<int, TryvohaEvent> events = LoadFromFile();
+            TryvohaPredictionServiceOff serviceOff = new TryvohaPredictionServiceOff();
+            TryvohaPredictionServiceOn serviceOn = new TryvohaPredictionServiceOn();
+            if (events.Count > 0)
+            {
+                serviceOn.GeneratePredictionEngines(events);
+                serviceOff.GeneratePredictionEngines(events);
+            }
+
+            //var modelEvals = serviceOn.GetModelEvaluationsAvg();
+            //Console.WriteLine($"model 'ON' - acc: {modelEvals.Item1:0.00}, posrec: {modelEvals.Item2:0.00}, f1: {modelEvals.Item3:0.00}");
+            //return;
+            Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
+
             //WTelegram.Helpers.Log = (i, s) => { };
             Console.OutputEncoding = Encoding.UTF8;
 
@@ -243,18 +257,7 @@ namespace TryvogaPrediction
                 Directory.CreateDirectory(DataPath);
             }
 
-            Dictionary<int, TryvohaEvent> events = LoadFromFile();
-            TryvohaPredictionServiceOff serviceOff = new TryvohaPredictionServiceOff();
-            TryvohaPredictionServiceOn serviceOn = new TryvohaPredictionServiceOn();
-            if (events.Count > 0)
-            {
-                serviceOn.GeneratePredictionEngines(events);
-                serviceOff.GeneratePredictionEngines(events);
-            }
-
-            var avg = serviceOff.GetModelEvaluationsAvg();
-            Console.WriteLine($"model 'OFF' - loss: {avg.Item2:0.0}, rsqr: {avg.Item1:0.00}, mae: {avg.Item3: 0.00}");
-            Dictionary<int, TryvohaEvent> initialEvents = new Dictionary<int, TryvohaEvent>();
+            
 
             Console.WriteLine($"loaded from db: {events.Count}. Reading new events.");
             FillInEvents(client, tryvogaChannel, initialEvents, events.Keys);
