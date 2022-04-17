@@ -208,28 +208,32 @@ namespace TryvogaPrediction
             //{
             //    Regions = new Dictionary<string, RegionStatus>
             //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=5} },
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=20} },
             //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
             //}
             //}, tryvogaPredictionTest, client);
             //Thread.Sleep(5000);
+
             //SendNotificationsToTelegram(new ResultPayload
             //{
             //    Regions = new Dictionary<string, RegionStatus>
             //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.5, Minutes=5} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.1, Minutes=2}  },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=10} } },
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
+            //}
             //}, tryvogaPredictionTest, client);
             //Thread.Sleep(5000);
+
             //SendNotificationsToTelegram(new ResultPayload
             //{
             //    Regions = new Dictionary<string, RegionStatus>
             //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.5, Minutes=2} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=3}  },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=4} } },
+            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
+            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            //}
             //}, tryvogaPredictionTest, client);
             //return;
             #endregion
@@ -332,7 +336,8 @@ namespace TryvogaPrediction
             int vidbijMins = 15;
             Dictionary<string, RegionStatus> newStatuses = payload.Regions.Where(g => notificationRegions.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
             if((OldStatuses == null && !newStatuses.Any(s => s.Value.Status || (s.Value.PredictedOn.HasValue && s.Value.PredictedOn.Value)))
-                || (newStatuses.All(s => s.Value.Minutes <= vidbijMins) && OldStatuses != null && OldStatuses.All(s => s.Value.Minutes <= vidbijMins)))
+                || (newStatuses.All(s => s.Value.Minutes <= vidbijMins) && OldStatuses != null && OldStatuses.All(s => s.Value.Minutes <= vidbijMins))
+                || (newStatuses.All(s => s.Value.PredictedOn.HasValue && !s.Value.PredictedOn.Value) && OldStatuses != null && OldStatuses.All(s => s.Value.PredictedOn.HasValue && !s.Value.PredictedOn.Value)))
             {
                 OldStatuses = new Dictionary<string, RegionStatus>(newStatuses);
                 return;
