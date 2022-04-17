@@ -167,7 +167,7 @@ namespace TryvogaPrediction
             double modelsAgeMins = _predictionEngines.Any()
                 ? (DateTime.UtcNow - File.GetLastWriteTimeUtc($"{Program.DataPath}/{_predictionEngines.Keys.First()}On.zip")).TotalMinutes
                 : double.MaxValue;
-            if (modelsAgeMins > 60)
+            if (modelsAgeMins > 360)
             {
                 GeneratePredictionEngines(events, regenerate: true);
             }
