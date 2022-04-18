@@ -376,12 +376,12 @@ namespace TryvogaPrediction
                 {
                     needToShow = true;
                 }
-                if (oldStatus == null && newStatus.Status && showOffMinutes > 5)
+                if (oldStatus == null && newStatus.Status && showOffMinutes > 10)
                 {
                     needToShow = true;
                     LastShowOff = DateTime.UtcNow;
                 }
-                if (oldStatus != null && newStatus.Status && newStatus.PredictedOffMinutes != oldStatus.PredictedOffMinutes && showOffMinutes > 5)
+                if (oldStatus != null && newStatus.Status && newStatus.PredictedOffMinutes != oldStatus.PredictedOffMinutes && showOffMinutes > 10)
                 {
                     needToShow = true;
                     LastShowOff = DateTime.UtcNow;
