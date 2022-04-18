@@ -399,7 +399,7 @@ namespace TryvogaPrediction
                 foreach (var status in newStatuses.OrderBy(s => s.Key))
                 {
                     string statusText = status.Value.PredictedOn.HasValue
-                            ? (status.Value.PredictedOn.Value && status.Value.Minutes > vidbijMins ? "можливо:" : (status.Value.Minutes <= vidbijMins ? "відбій." : "немає:"))
+                            ? (status.Value.PredictedOn.Value && status.Value.Minutes > vidbijMins ? "ймовірно:" : (status.Value.Minutes <= vidbijMins ? "відбій." : "немає:"))
                             : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Status ? "тривога." : "немає."));
                     string statusValue = status.Value.PredictedOn.HasValue
                             ? (status.Value.Minutes > vidbijMins ? $"{status.Value.ProbabilityOn * 100:0}%" : string.Empty)
