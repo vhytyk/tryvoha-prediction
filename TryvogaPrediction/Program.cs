@@ -208,48 +208,58 @@ namespace TryvogaPrediction
             Channel tryvogaPredictionTest = (Channel)allChats.chats[1660739731];
 
             #region show test
-            //SendNotificationsToTelegram(new ResultPayload
-            //{
-            //    Regions = new Dictionary<string, RegionStatus>
-            //{
-            //    {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
-            //}
-            //}, tryvogaPredictionTest, client);
-            //Thread.Sleep(5000);
-            //SendNotificationsToTelegram(new ResultPayload
-            //{
-            //    Regions = new Dictionary<string, RegionStatus>
-            //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=20} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
-            //}
-            //}, tryvogaPredictionTest, client);
-            //Thread.Sleep(5000);
+            SendNotificationsToTelegram(new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>
+            {
+                {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
+                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            }
+            }, tryvogaPredictionTest, client);
+            Thread.Sleep(5000);
+            SendNotificationsToTelegram(new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>
+            {
+                {"Закарпатська", new RegionStatus{ Status = true, PredictedOffMinutes = 15, Minutes=10} },
+                {"Львівська", new RegionStatus{ Status = true, PredictedOffMinutes = -3, Minutes=10} },
+                {"Івано-Франківська", new RegionStatus{ Status = true, PredictedOffMinutes = 0, Minutes=10}  },
+            }
+            }, tryvogaPredictionTest, client);
+            Thread.Sleep(5000);
+            SendNotificationsToTelegram(new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>
+            {
+                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=20} },
+                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
+            }
+            }, tryvogaPredictionTest, client);
+            Thread.Sleep(5000);
 
-            //SendNotificationsToTelegram(new ResultPayload
-            //{
-            //    Regions = new Dictionary<string, RegionStatus>
-            //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
-            //}
-            //}, tryvogaPredictionTest, client);
-            //Thread.Sleep(5000);
+            SendNotificationsToTelegram(new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>
+            {
+                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
+                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.3, Minutes=20} },
+            }
+            }, tryvogaPredictionTest, client);
+            Thread.Sleep(5000);
 
-            //SendNotificationsToTelegram(new ResultPayload
-            //{
-            //    Regions = new Dictionary<string, RegionStatus>
-            //{
-            //    {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
-            //    {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
-            //    {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
-            //}
-            //}, tryvogaPredictionTest, client);
-            //return;
+            SendNotificationsToTelegram(new ResultPayload
+            {
+                Regions = new Dictionary<string, RegionStatus>
+            {
+                {"Закарпатська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.2, Minutes=20} },
+                {"Львівська", new RegionStatus{ Status = false, PredictedOn = false, ProbabilityOn = 0.1, Minutes=30} },
+                {"Івано-Франківська", new RegionStatus{ Status = false, PredictedOn = true, ProbabilityOn = 0.6, Minutes=20} },
+            }
+            }, tryvogaPredictionTest, client);
+            return;
             #endregion
 
             if (!Directory.Exists(DataPath))
@@ -393,7 +403,9 @@ namespace TryvogaPrediction
                             : (status.Value.PredictedOffMinutes.HasValue ? "тривога:" : (status.Value.Status ? "тривога." : "немає."));
                     string statusValue = status.Value.PredictedOn.HasValue
                             ? (status.Value.Minutes > vidbijMins ? $"{status.Value.ProbabilityOn * 100:0}%" : string.Empty)
-                            : (status.Value.PredictedOffMinutes.HasValue ? $"~{Math.Abs(status.Value.PredictedOffMinutes.Value):0}хв" : "");
+                            : (status.Value.PredictedOffMinutes.HasValue
+                                ? (status.Value.PredictedOffMinutes <=0 ? "ще трішки" : $"\\~{status.Value.PredictedOffMinutes.Value:0}хв")
+                                : "");
                     string statusSmile = status.Value.PredictedOn.HasValue
                             ? (status.Value.PredictedOn.Value && status.Value.Minutes > vidbijMins ? "⚠️" : "🍀")
                             : (status.Value.PredictedOffMinutes.HasValue ? "🔴" : (status.Value.Status ? "🔴" : "🍀"));
